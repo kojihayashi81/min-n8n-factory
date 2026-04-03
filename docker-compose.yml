@@ -1,0 +1,17 @@
+services:
+  n8n:
+    image: n8nio/n8n:1.121.2
+    restart: unless-stopped
+    ports: ["5678:5678"]
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - GENERIC_TIMEZONE=Asia/Tokyo
+      - HOST_SSH_USER=${HOST_SSH_USER}
+    volumes:
+      - ./data/n8n:/home/node/.n8n
+      - ~/.ssh:/home/node/.ssh:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
