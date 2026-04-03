@@ -1,6 +1,6 @@
 .PHONY: setup up down auth
 
-include .env
+-include .env
 export
 
 setup:
