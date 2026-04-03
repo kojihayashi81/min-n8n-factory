@@ -1,4 +1,7 @@
-.PHONY: setup up down
+.PHONY: setup up down auth
+
+include .env
+export
 
 setup:
 	@cp -n .env.example .env || true
@@ -13,3 +16,7 @@ up:
 
 down:
 	docker compose down
+
+# このリポジトリへの git push 用に GitHub CLI を認証する（PAT 期限切れ時に再実行）
+auth:
+	@op read "op://$(OP_VAULT_ID)/GitHub PAT min-factory/token" | gh auth login --with-token

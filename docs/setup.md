@@ -1,5 +1,16 @@
 # セットアップ手順
 
+## 前提条件
+
+- **1Password** を使用して PAT などの秘密情報を管理する
+- 1Password CLI (`op`) と 1Password アプリの連携を有効にしておく（Settings → Developer → 「Integrate with 1Password CLI」をオン）
+
+```bash
+brew install 1password-cli
+```
+
+---
+
 ## 前提ツールのインストール
 
 ### 1. GitHub CLI
@@ -34,7 +45,7 @@ gh auth login
 
 対話式で以下を選択する：
 
-```
+```text
 ? Where do you use GitHub?  → GitHub.com
 ? What is your preferred protocol for Git operations?  → HTTPS
 ? Authenticate Git with your GitHub credentials?  → Yes
@@ -88,7 +99,7 @@ make up
 n8n UI → Settings → Credentials で以下を登録する。
 
 | Credential 名 | 種類 | 値 |
-|---|---|---|
+| --- | --- | --- |
 | `github-token` | Header Auth | `gh auth token` の出力 |
 
 ```bash
@@ -97,6 +108,15 @@ gh auth token
 ```
 
 > このトークンは n8n Credentials にのみ登録する。`.env` には書かない。
+
+---
+
+## PAT 権限
+
+| PAT | 必要な権限 |
+| --- | --- |
+| `min-n8n-factory` 用（このリポジトリ管理） | Contents: Read & Write |
+| AIワークフロー対象リポジトリ用 | Issues: Read（取得のみ）/ Issues: Read & Write（作成・更新も行う場合） |
 
 ---
 
