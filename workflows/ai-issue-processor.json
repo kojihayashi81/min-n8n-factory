@@ -1,0 +1,131 @@
+{
+  "name": "AI Issue Processor（調査フロー）",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "node-schedule",
+      "name": "Schedule 10min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://api.github.com/repos/' + $env.GITHUB_REPO + '/issues?labels=ai-ready&state=open&sort=created&direction=asc&per_page=1' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "options": {}
+      },
+      "id": "node-get-issues",
+      "name": "Get oldest ai-ready Issue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 300],
+      "notes": "GITHUB_REPO env var から取得。per_page=1 + sort=created asc で最古の1件のみ取得。issues がなければ空配列 → 以降のノードはスキップされる。",
+      "credentials": {
+        "githubApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "github-gomoku"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ 'https://api.github.com/repos/' + $env.GITHUB_REPO + '/issues/' + $json.number }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "{\"labels\": [\"ai-processing\"]}",
+        "options": {}
+      },
+      "id": "node-update-label",
+      "name": "Set ai-processing label",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 300],
+      "notes": "ai-ready を削除し ai-processing を付与。二重起動防止ガード。",
+      "credentials": {
+        "githubApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "github-gomoku"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "={{ 'ssh -o StrictHostKeyChecking=no ' + $env.HOST_SSH_USER + '@host.docker.internal \"claude --print \\\"以下のGitHub Issueを調査してください。\\\\n\\\\nタイトル: ' + $(\\'Get oldest ai-ready Issue\\').item.json.title.replace(/\\\"/g, \\'\\\\\\\\\\\"\\') + '\\\\n\\\\n内容:\\\\n' + $(\\'Get oldest ai-ready Issue\\').item.json.body.replace(/\\\"/g, \\'\\\\\\\\\\\"\\') + '\\\"\"' }}"
+      },
+      "id": "node-run-claude",
+      "name": "Run Claude Code",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [700, 300],
+      "notes": "n8n コンテナから SSH でホスト Mac の claude CLI を呼び出す。SSH 鍵は ~/.ssh/id_rsa をコンテナにマウント済み。"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.github.com/repos/' + $env.GITHUB_REPO + '/issues/' + $('Get oldest ai-ready Issue').item.json.number + '/comments' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "githubApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({body: '## 調査結果\\n\\n' + $json.stdout}) }}",
+        "options": {}
+      },
+      "id": "node-post-comment",
+      "name": "Post Result to Issue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300],
+      "notes": "claude の stdout を Issue コメントとして投稿する。",
+      "credentials": {
+        "githubApi": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "github-gomoku"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule 10min": {
+      "main": [
+        [{"node": "Get oldest ai-ready Issue", "type": "main", "index": 0}]
+      ]
+    },
+    "Get oldest ai-ready Issue": {
+      "main": [
+        [{"node": "Set ai-processing label", "type": "main", "index": 0}]
+      ]
+    },
+    "Set ai-processing label": {
+      "main": [
+        [{"node": "Run Claude Code", "type": "main", "index": 0}]
+      ]
+    },
+    "Run Claude Code": {
+      "main": [
+        [{"node": "Post Result to Issue", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
