@@ -1,0 +1,43 @@
+name: AI タスク
+description: Claude Code に処理させたいタスクを登録する
+title: "[AI] "
+labels: ["ai-ready"]
+body:
+  - type: dropdown
+    id: task_type
+    attributes:
+      label: タスクタイプ
+      description: Claude Code に何をさせますか？
+      options:
+        - 🔍 調査
+        - 📋 仕様化
+        - 🚀 実装
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 何をしてほしいか簡潔に書いてください
+      placeholder: 例：五目並べの禁じ手ルールを調査してまとめてください
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 完了条件
+      description: これができたら Done とする条件を書いてください
+      placeholder: |
+        - [ ] 基本ルールが箇条書きでまとまっている
+        - [ ] 禁じ手の種類が記載されている
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 補足情報
+      description: 対象ファイル・参考情報など（任意）
+      placeholder: 例：src/game/rules.ts を参照してください
