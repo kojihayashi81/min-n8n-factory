@@ -8,12 +8,16 @@ if [ -z "$GITHUB_REPO" ]; then
 fi
 
 REPO="$GITHUB_REPO"
+
+echo "Note: make sure to run 'make setup-labels' first to create the 'ai-ready' label in $REPO"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TEMPLATE_DIR="$SCRIPT_DIR/../.github/ISSUE_TEMPLATE"
 WORK_DIR="$(mktemp -d)"
+trap 'rm -rf "$WORK_DIR"' EXIT
 
+# Note: "cloned an empty repository" warning is expected for new repositories
 echo "Cloning $REPO..."
-gh repo clone "$REPO" "$WORK_DIR" -- --depth=1
+gh repo clone "$REPO" "$WORK_DIR" -- --depth=1 2>&1 | grep -v "warning: You appear to have cloned an empty repository" || true
 
 echo "Copying Issue templates..."
 mkdir -p "$WORK_DIR/.github/ISSUE_TEMPLATE"
@@ -29,5 +33,3 @@ else
   git push
   echo "done: Issue templates pushed to $REPO"
 fi
-
-rm -rf "$WORK_DIR"
