@@ -40,12 +40,7 @@
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
       "position": [300, 300],
-      "credentials": {
-        "githubApi": {
-          "id": "REPLACE_WITH_CREDENTIAL_ID",
-          "name": "github-gomoku"
-        }
-      }
+      "credentials": {}
     },
     {
       "parameters": {
@@ -81,12 +76,7 @@
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
       "position": [700, 200],
-      "credentials": {
-        "githubApi": {
-          "id": "REPLACE_WITH_CREDENTIAL_ID",
-          "name": "github-gomoku"
-        }
-      }
+      "credentials": {}
     },
     {
       "parameters": {
@@ -113,12 +103,7 @@
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
       "position": [1100, 200],
-      "credentials": {
-        "githubApi": {
-          "id": "REPLACE_WITH_CREDENTIAL_ID",
-          "name": "github-gomoku"
-        }
-      }
+      "credentials": {}
     }
   ],
   "connections": {

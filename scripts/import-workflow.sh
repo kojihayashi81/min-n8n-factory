@@ -21,3 +21,6 @@ for workflow_file in "$WORKFLOW_DIR"/*.json; do
     -d @"$workflow_file" | jq '.id, .name'
   echo "done: $name"
 done
+
+echo ""
+echo "⚠️  インポート後に n8n UI で GitHub ノードの Credential を手動で紐付けてください。"
