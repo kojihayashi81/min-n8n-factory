@@ -96,18 +96,31 @@ make up
 
 ## n8n Credentials 登録
 
-n8n UI → Settings → Credentials で以下を登録する。
+対象リポジトリごとに Fine-grained PAT を発行し、n8n に登録する。
 
-| Credential 名 | 種類 | 値 |
-| --- | --- | --- |
-| `github-token` | Header Auth | `gh auth token` の出力 |
+### 1. Fine-grained PAT を発行
 
-```bash
-# GitHub トークンの取得
-gh auth token
-```
+GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token
 
-> このトークンは n8n Credentials にのみ登録する。`.env` には書かない。
+| 設定項目 | 値 |
+| --- | --- |
+| Repository access | 対象リポジトリのみ選択 |
+| Issues | Read and write |
+| Contents | Read and write（実装フェーズで必要） |
+
+発行したトークンは 1Password に保存する。
+
+### 2. n8n に Credentials を登録
+
+n8n UI → 左サイドバー `+` → Add credential → `GitHub API` を選択
+
+| フィールド | 値 |
+| --- | --- |
+| Credential Name | `github-<リポジトリ名>`（例: `github-gomoku`） |
+| GitHub Server | `https://api.github.com` |
+| Access Token | 発行した Fine-grained PAT |
+
+> PAT は n8n Credentials にのみ登録する。`.env` には書かない。
 
 ---
 
