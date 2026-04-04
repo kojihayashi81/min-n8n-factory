@@ -31,7 +31,16 @@ cat <<'EOF' | bash .claude/scripts/save-investigation.sh $ARGUMENTS
 # Issue #$ARGUMENTS 調査ノート
 
 ## 調査対象
-{Issue タイトル}
+
+**タイトル:** {Issue タイトル}
+
+**概要:** {Issue の内容を1〜2文で要約}
+
+**調査の焦点:**
+
+- {調査すべき主なポイント1}
+- {調査すべき主なポイント2}
+- {調査すべき主なポイント3（任意）}
 
 ## 調査結果
 
