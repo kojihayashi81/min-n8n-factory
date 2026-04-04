@@ -1,4 +1,4 @@
-.PHONY: setup up down auth setup-labels
+.PHONY: setup up down auth setup-labels setup-issue-template
 
 -include .env
 export
@@ -20,6 +20,10 @@ down:
 # .envのGITHUB_REPOで指定したリポジトリにAIワークフロー用ラベルを一括作成する
 setup-labels:
 	@bash scripts/setup-labels.sh
+
+# .envのGITHUB_REPOで指定したリポジトリにAI Issue Formテンプレートを配布・コミットする
+setup-issue-template:
+	@bash scripts/setup-issue-template.sh
 
 # このリポジトリへの git push 用に GitHub CLI を認証する（PAT 期限切れ時に再実行）
 auth:
