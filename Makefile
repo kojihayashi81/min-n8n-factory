@@ -1,4 +1,4 @@
-.PHONY: setup up down auth setup-labels setup-issue-template import-workflow
+.PHONY: setup up down auth setup-labels setup-issue-template setup-skills import-workflow
 
 -include .env
 export
@@ -24,6 +24,10 @@ setup-labels:
 # .envのGITHUB_REPOで指定したリポジトリにAI Issue Formテンプレートを配布・コミットする
 setup-issue-template:
 	@bash scripts/setup-issue-template.sh
+
+# .envのGITHUB_REPOで指定したリポジトリにAI Skill テンプレートを配布・コミットする
+setup-skills:
+	@bash scripts/setup-skills.sh
 
 # workflows/ 配下の JSON を n8n にインポートする（N8N_API_KEY が必要）
 import-workflow:
