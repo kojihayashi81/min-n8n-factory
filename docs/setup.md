@@ -132,6 +132,45 @@ gh auth token
 
 ---
 
+## 対象リポジトリの初期セットアップ
+
+新しいリポジトリを AI ワークフローの対象にする場合、以下の順番で実行する。
+
+### 1. `.env` の `GITHUB_REPO` を設定
+
+```bash
+# .env を編集
+GITHUB_REPO=owner/repo-name
+```
+
+### 2. ラベルを作成
+
+```bash
+make setup-labels
+```
+
+以下の5つのラベルが作成される:
+
+| ラベル | 意味 |
+| --- | --- |
+| `ai-ready` | 唯一のトリガー。人間のみが付与する |
+| `ai-processing` | AI 処理中。二重起動防止ガード |
+| `ai-review` | PR 作成済み・レビュー待ち |
+| `ai-done` | 完了 |
+| `ai-failed` | エラー・タイムアウト。人間の介入が必要 |
+
+### 3. Issue Form テンプレートを配布
+
+```bash
+make setup-issue-template
+```
+
+対象リポジトリの `.github/ISSUE_TEMPLATE/` に AI タスク専用フォームがコミット・プッシュされる。
+
+> `make setup-labels` を先に実行していないと、Issue 作成時に `ai-ready` ラベルが付与されない。
+
+---
+
 ## 動作確認
 
 ```bash
