@@ -1,43 +1,74 @@
 ---
 name: investigate
-description: GitHub Issue の内容を調査し、結果を openspec/investigations/ に保存する
+description: >
+  GitHub Issue の内容を調査し、結果を openspec/investigations/ に保存して Draft PR を作成する。
+  「調査して」「/investigate」と指示されたときに使用。
+argument-hint: "[issue-number]"
+allowed-tools: Read Grep Bash(git *) Bash(gh *) WebSearch
 ---
 
-以下の GitHub Issue を調査してください。
+Issue #$ARGUMENTS を調査して Draft PR を作成してください。以下の手順で実行してください。
 
-## 調査方針
+## 手順
 
-- コードベースを優先的に参照する
-- Web 検索は公式ドキュメント・信頼性の高いソースのみ使用する
-- 不確かな情報は「要確認:」と前置きする
+### 1. ブランチ作成
 
-## 調査ソース（優先順）
+```bash
+git checkout main && git pull
+git checkout -b investigation/issue-$ARGUMENTS
+```
 
-1. このリポジトリのコードベース
-2. openspec/specs/ 以下の仕様ファイル（存在する場合）
-3. 公式ドキュメント・Web 検索
+### 2. 調査
 
-## 出力形式
+CLAUDE.md の調査方針に従って Issue #$ARGUMENTS の内容を調査する。
 
-調査結果を `openspec/investigations/issue-$ARGUMENTS-investigation.md` に保存すること。
+### 3. 調査ノートを保存
 
-ファイル形式:
+調査結果を以下のパスに保存する:
+
+```text
+openspec/investigations/issue-$ARGUMENTS-investigation.md
+```
+
+ファイル構成:
 
 ```markdown
-# Issue #{番号} 調査ノート
+# Issue #$ARGUMENTS 調査ノート
 
 ## 調査対象
 {Issue タイトル}
 
 ## 調査結果
-- {箇条書き、5件以内}
+
+{調査内容を箇条書きで記載}
 
 ## 要確認事項
-- {不確かな点、なければ「なし」}
+
+{不確かな点。なければ「なし」}
 
 ## 参考ソース
-- {URL またはファイルパス}
+
+{URL またはファイルパス}
 ```
 
-保存後、以下を標準出力に返すこと:
-`openspec/investigations/issue-$ARGUMENTS-investigation.md`
+### 4. コミット & プッシュ
+
+```bash
+mkdir -p openspec/investigations
+git add openspec/investigations/issue-$ARGUMENTS-investigation.md
+git commit -m "investigate: add investigation note for issue #$ARGUMENTS"
+git push -u origin investigation/issue-$ARGUMENTS
+```
+
+### 5. Draft PR を作成
+
+```bash
+gh pr create \
+  --title "investigate: Issue #$ARGUMENTS 調査ノート" \
+  --body "Closes #$ARGUMENTS" \
+  --draft
+```
+
+### 6. 標準出力に PR URL を返す
+
+作成した PR の URL のみを標準出力に出力する。

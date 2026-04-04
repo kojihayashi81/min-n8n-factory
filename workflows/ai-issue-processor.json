@@ -45,19 +45,29 @@
     {
       "parameters": {
         "conditions": {
-          "number": [
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
             {
-              "value1": "={{ $json.length }}",
-              "operation": "largerEqual",
-              "value2": 1
+              "id": "condition-has-number",
+              "leftValue": "={{ $json.number }}",
+              "rightValue": "",
+              "operator": {
+                "type": "number",
+                "operation": "exists"
+              }
             }
-          ]
+          ],
+          "combinator": "and"
         }
       },
       "id": "node-if-exists",
       "name": "Issue exists?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
+      "typeVersion": 2,
       "position": [500, 300]
     },
     {
@@ -80,14 +90,14 @@
     },
     {
       "parameters": {
-        "command": "={{ 'claude --print \"以下のGitHub Issueを調査してください。\\n\\nタイトル: ' + $('Get oldest ai-ready Issue').item.json.title + '\\n\\n内容:\\n' + $('Get oldest ai-ready Issue').item.json.body + '\"' }}"
+        "command": "={{ 'cd ' + $env.PROJECT_PATH + ' && claude --print \"/investigate ' + $(\\'Get oldest ai-ready Issue\\').item.json.number + '\"' }}"
       },
       "id": "node-run-claude",
       "name": "Run Claude Code",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [900, 200],
-      "notes": "ホスト側で claude CLI を直接実行する。SSH 経由の場合は後で調整する。"
+      "notes": "PROJECT_PATH に移動して /investigate {number} Skill を実行。stdout に PR URL が返る。"
     },
     {
       "parameters": {
@@ -96,10 +106,10 @@
         "owner": "={{ $env.GITHUB_REPO.split('/')[0] }}",
         "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
         "issueNumber": "={{ $('Get oldest ai-ready Issue').item.json.number }}",
-        "body": "={{ '## 調査結果\\n\\n' + $json.stdout }}"
+        "body": "={{ '調査完了しました。結果は以下の Draft PR を確認してください。\\n\\n' + $json.stdout.trim() }}"
       },
       "id": "node-post-comment",
-      "name": "Post Result to Issue",
+      "name": "Post PR Link to Issue",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
       "position": [1100, 200],
@@ -130,7 +140,7 @@
     },
     "Run Claude Code": {
       "main": [
-        [{"node": "Post Result to Issue", "type": "main", "index": 0}]
+        [{"node": "Post PR Link to Issue", "type": "main", "index": 0}]
       ]
     }
   },
