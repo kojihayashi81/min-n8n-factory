@@ -1,4 +1,4 @@
-.PHONY: setup up down auth
+.PHONY: setup up down auth setup-labels
 
 -include .env
 export
@@ -16,6 +16,10 @@ up:
 
 down:
 	docker compose down
+
+# .envのGITHUB_REPOで指定したリポジトリにAIワークフロー用ラベルを一括作成する
+setup-labels:
+	@bash scripts/setup-labels.sh
 
 # このリポジトリへの git push 用に GitHub CLI を認証する（PAT 期限切れ時に再実行）
 auth:

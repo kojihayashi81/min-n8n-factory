@@ -26,6 +26,24 @@ make up
 
 詳細は [docs/setup.md](docs/setup.md) を参照。
 
+## トラブルシュート
+
+### `make auth` で 1Password のセッションエラーが出る
+
+```text
+[ERROR] You are not currently signed in. Please run `op signin --help` for instructions
+```
+
+1Password のセッションが切れています。以下を実行してから `make auth` を再実行してください:
+
+```bash
+eval $(op signin) && make auth
+```
+
+再発を防ぐには 1Password アプリの **Settings → Security → Touch ID でロック解除** を有効にしてください。
+
+---
+
 ## コマンド
 
 | コマンド | 内容 |
