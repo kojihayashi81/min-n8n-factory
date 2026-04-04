@@ -10,6 +10,7 @@ fi
 REPO="$GITHUB_REPO"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_DIR="$SCRIPT_DIR/../templates/skills"
+SCRIPTS_DIR="$SCRIPT_DIR/../templates/scripts"
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
@@ -20,8 +21,13 @@ echo "Copying Skill templates..."
 mkdir -p "$WORK_DIR/.claude/commands"
 cp "$SKILLS_DIR/"*.md "$WORK_DIR/.claude/commands/"
 
+echo "Copying scripts..."
+mkdir -p "$WORK_DIR/.claude/scripts"
+cp "$SCRIPTS_DIR/"*.sh "$WORK_DIR/.claude/scripts/"
+chmod +x "$WORK_DIR/.claude/scripts/"*.sh
+
 cd "$WORK_DIR"
-git add .claude/commands/
+git add .claude/commands/ .claude/scripts/
 if git diff --cached --quiet; then
   echo "skip: no changes to commit"
 else

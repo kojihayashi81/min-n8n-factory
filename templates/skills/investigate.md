@@ -24,15 +24,10 @@ CLAUDE.md の調査方針に従って Issue #$ARGUMENTS の内容を調査する
 
 ### 3. 調査ノートを保存
 
-調査結果を以下のパスに保存する:
+以下のフォーマットで調査結果を作成し、スクリプトに渡して保存する:
 
-```text
-openspec/investigations/issue-$ARGUMENTS-investigation.md
-```
-
-ファイル構成:
-
-```markdown
+```bash
+cat <<'EOF' | bash .claude/scripts/save-investigation.sh $ARGUMENTS
 # Issue #$ARGUMENTS 調査ノート
 
 ## 調査対象
@@ -49,6 +44,7 @@ openspec/investigations/issue-$ARGUMENTS-investigation.md
 ## 参考ソース
 
 {URL またはファイルパス}
+EOF
 ```
 
 ### 4. コミット & プッシュ
