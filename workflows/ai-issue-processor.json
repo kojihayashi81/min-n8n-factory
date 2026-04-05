@@ -91,14 +91,15 @@
     },
     {
       "parameters": {
-        "command": "={{ 'ssh -o StrictHostKeyChecking=no ' + $env.HOST_SSH_USER + '@host.docker.internal \"cd ' + $env.PROJECT_PATH + ' && claude --print \\\"/investigate ' + $('Get oldest ai-ready Issue').item.json.number + '\\\"\"' }}"
+        "command": "={{ 'echo \"TODO: claude 実行方法は未確定 - issue: ' + $('Get oldest ai-ready Issue').item.json.number + '\"' }}"
       },
       "id": "node-run-claude",
       "name": "Run Claude Code",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [912, 208],
-      "notes": "PROJECT_PATH に移動して /investigate {number} Skill を実行。stdout に PR URL が返る。"
+      "onError": "continueErrorOutput",
+      "notes": "stdout: PR URL / stderr: --verbose ツール呼び出しログ（n8n Executions に7日間保存）"
     },
     {
       "parameters": {
@@ -113,6 +114,59 @@
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
       "position": [1104, 208],
+      "onError": "continueErrorOutput",
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "issue",
+        "operation": "edit",
+        "owner": "={{ $env.GITHUB_REPO.split('/')[0] }}",
+        "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
+        "issueNumber": "={{ $('Get oldest ai-ready Issue').item.json.number }}",
+        "editFields": {
+          "labels": "ai-investigated"
+        }
+      },
+      "id": "node-label-investigated",
+      "name": "Set ai-investigated label",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [1300, 200],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "issue",
+        "operation": "edit",
+        "owner": "={{ $env.GITHUB_REPO.split('/')[0] }}",
+        "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
+        "issueNumber": "={{ $('Get oldest ai-ready Issue').item.json.number }}",
+        "editFields": {
+          "labels": "ai-failed"
+        }
+      },
+      "id": "node-label-failed",
+      "name": "Set ai-failed label",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [1100, 420],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "resource": "issue",
+        "operation": "createComment",
+        "owner": "={{ $env.GITHUB_REPO.split('/')[0] }}",
+        "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
+        "issueNumber": "={{ $('Get oldest ai-ready Issue').item.json.number }}",
+        "body": "={{ '調査中にエラーが発生しました（タイムアウトまたは予期しないエラー）。再試行するには `ai-ready` ラベルを付け直してください。\\n\\n```\\n' + ($('Run Claude Code').item.json.stderr || 'タイムアウト（' + ($env.CLAUDE_TIMEOUT_SEC || '600') + '秒）') + '\\n```' }}"
+      },
+      "id": "node-post-error-comment",
+      "name": "Post Error Comment",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [1300, 420],
       "credentials": {}
     }
   ],
@@ -139,11 +193,25 @@
     },
     "Run Claude Code": {
       "main": [
-        [{"node": "Post PR Link to Issue", "type": "main", "index": 0}]
+        [{"node": "Post PR Link to Issue", "type": "main", "index": 0}],
+        [{"node": "Set ai-failed label", "type": "main", "index": 0}]
+      ]
+    },
+    "Post PR Link to Issue": {
+      "main": [
+        [{"node": "Set ai-investigated label", "type": "main", "index": 0}],
+        [{"node": "Set ai-failed label", "type": "main", "index": 0}]
+      ]
+    },
+    "Set ai-failed label": {
+      "main": [
+        [{"node": "Post Error Comment", "type": "main", "index": 0}]
       ]
     }
   },
   "settings": {
-    "executionOrder": "v1"
-  }
+    "executionOrder": "v1",
+    "timeout": 660
+  },
+  "tags": []
 }
