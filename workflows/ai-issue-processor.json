@@ -16,30 +16,25 @@
       "name": "Schedule 10min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [100, 300]
+      "position": [112, 304]
     },
     {
       "parameters": {
-        "resource": "issue",
-        "operation": "getAll",
+        "resource": "repository",
         "owner": "={{ $env.GITHUB_REPO.split('/')[0] }}",
         "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
-        "returnAll": false,
         "limit": 1,
-        "filters": {
+        "getRepositoryIssuesFilters": {
           "labels": "ai-ready",
-          "state": "open"
-        },
-        "options": {
-          "sort": "created",
-          "direction": "asc"
+          "state": "open",
+          "sort": "created"
         }
       },
       "id": "node-get-issues",
       "name": "Get oldest ai-ready Issue",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [300, 300],
+      "position": [304, 304],
       "credentials": {}
     },
     {
@@ -48,60 +43,65 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "strict"
+            "typeValidation": "strict",
+            "version": 3
           },
           "conditions": [
             {
               "id": "condition-has-number",
-              "leftValue": "={{ $json.number }}",
+              "leftValue": "={{ !!$json.number }}",
               "rightValue": "",
               "operator": {
-                "type": "number",
-                "operation": "exists"
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
               }
             }
           ],
           "combinator": "and"
-        }
+        },
+        "options": {}
       },
       "id": "node-if-exists",
-      "name": "Issue exists?",
+      "name": "If",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [500, 300]
+      "typeVersion": 2.3,
+      "position": [496, 304]
     },
     {
       "parameters": {
-        "resource": "issue",
         "operation": "edit",
         "owner": "={{ $env.GITHUB_REPO.split('/')[0] }}",
         "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
         "issueNumber": "={{ $('Get oldest ai-ready Issue').item.json.number }}",
         "editFields": {
-          "labels": "ai-processing"
+          "labels": [
+            {
+              "label": "ai-processing"
+            }
+          ]
         }
       },
       "id": "node-update-label",
       "name": "Set ai-processing label",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [700, 200],
+      "position": [704, 208],
       "credentials": {}
     },
     {
       "parameters": {
-        "command": "={{ 'cd ' + $env.PROJECT_PATH + ' && claude --print \"/investigate ' + $(\\'Get oldest ai-ready Issue\\').item.json.number + '\"' }}"
+        "command": "={{ 'ssh -o StrictHostKeyChecking=no ' + $env.HOST_SSH_USER + '@host.docker.internal \"cd ' + $env.PROJECT_PATH + ' && claude --print \\\"/investigate ' + $('Get oldest ai-ready Issue').item.json.number + '\\\"\"' }}"
       },
       "id": "node-run-claude",
       "name": "Run Claude Code",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [900, 200],
+      "position": [912, 208],
       "notes": "PROJECT_PATH に移動して /investigate {number} Skill を実行。stdout に PR URL が返る。"
     },
     {
       "parameters": {
-        "resource": "issue",
         "operation": "createComment",
         "owner": "={{ $env.GITHUB_REPO.split('/')[0] }}",
         "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
@@ -112,7 +112,7 @@
       "name": "Post PR Link to Issue",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1100, 200],
+      "position": [1104, 208],
       "credentials": {}
     }
   ],
@@ -124,13 +124,12 @@
     },
     "Get oldest ai-ready Issue": {
       "main": [
-        [{"node": "Issue exists?", "type": "main", "index": 0}]
+        [{"node": "If", "type": "main", "index": 0}]
       ]
     },
-    "Issue exists?": {
+    "If": {
       "main": [
-        [{"node": "Set ai-processing label", "type": "main", "index": 0}],
-        []
+        [{"node": "Set ai-processing label", "type": "main", "index": 0}]
       ]
     },
     "Set ai-processing label": {
@@ -144,9 +143,7 @@
       ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1"
-  },
-  "tags": []
+  }
 }
