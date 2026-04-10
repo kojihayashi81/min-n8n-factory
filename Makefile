@@ -1,4 +1,4 @@
-.PHONY: setup up down auth setup-labels setup-issue-template setup-skills import-workflow lint lint-fix
+.PHONY: setup up down auth setup-labels setup-issue-template setup-skills setup-devcontainer import-workflow lint lint-fix
 
 -include .env
 export
@@ -28,6 +28,10 @@ setup-issue-template:
 # .envのGITHUB_REPOで指定したリポジトリにAI Skill テンプレートを配布・コミットする
 setup-skills:
 	@bash scripts/setup-skills.sh
+
+# .envのGITHUB_REPOで指定したリポジトリのDevContainerにClaudeCode設定を追加・配布する
+setup-devcontainer:
+	@bash scripts/setup-devcontainer.sh
 
 # workflows/ 配下の JSON を n8n にインポートする（N8N_API_KEY が必要）
 import-workflow:

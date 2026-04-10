@@ -1,0 +1,24 @@
+現在の問題点まとめ
+解決済み
+#	問題	対応
+1	Encryption Key 不一致でコンテナ起動不可	.env のキーを data/n8n/config に合わせた
+2	ワークフローJSON の active, tags が read-only でインポート失敗	フィールド除去
+3	GITHUB_REPO がコンテナに渡っていない	docker-compose.yml に環境変数追加
+4	GitHub ノードの getAll 非対応	repository → getIssues に変更
+5	IF ノード v2 の条件が常に False	!!$json.number + Boolean is true + v2.3 で解決
+6	labels のフォーマットエラー	[{"label": "ai-processing"}] 形式に修正
+7	N8N_URL のフォールバックが効かない	:= に修正
+8	再インポート時にワークフロー重複	名前検索 → PUT/POST の分岐に修正
+未解決
+#	問題	詳細
+1	コンテナからホストの claude CLI を実行できない	executeCommand はコンテナ内で実行されるため、ホストの claude にアクセスできない
+2	SSH 接続が失敗する	.ssh が :ro マウントで known_hosts 書き込み不可 + 認証エラー
+3	ホストの「リモートログイン」未確認	macOS の SSH サーバーが有効か未確認
+根本課題
+n8n（コンテナ内）からホストの claude CLI をどう呼ぶか — これが解決すればワークフロー全体が動きます。
+
+選択肢:
+
+SSH を修正 — .ssh を :rw にし、ホストのリモートログインを有効化（最小変更）
+ホスト側に webhook サーバーを立てる — n8n → HTTP → ホストのスクリプトが claude 実行
+DevContainer 案 — 対象プロジェクトをコンテナ化して Docker ネットワーク内で完結
