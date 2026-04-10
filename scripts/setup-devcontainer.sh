@@ -67,8 +67,3 @@ else
   echo "done: devcontainer pushed to $REPO"
 fi
 
-echo ""
-echo "次のステップ:"
-echo "  1. $REPO の .devcontainer/ でイメージをビルド・push する"
-echo "  2. .env の DEVCONTAINER_IMAGE にイメージ名を設定する"
-echo "  例: ghcr.io/${REPO}:latest"
