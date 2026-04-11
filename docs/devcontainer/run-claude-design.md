@@ -28,34 +28,35 @@
 
 Max プランの認証トークンは macOS キーチェーンに保存されるため、ファイルマウントではコンテナに渡せない。`CLAUDE_CODE_OAUTH_TOKEN` 環境変数を使えば、キーチェーンに依存せず認証できる。
 
+- 公式ドキュメント: [Generate a long-lived token](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token)
+- 環境変数リファレンス: [Claude Code Environment Variables](https://code.claude.com/docs/en/env-vars)
+
+#### トークンの流れ
+
+```text
+claude setup-token（1年間有効なトークンを生成）
+  → .env に保存
+  → docker-compose.yml で n8n コンテナに渡す
+  → devcontainer.json の remoteEnv + ${localEnv:...} で DevContainer に渡る
+  → DevContainer 内の claude --print が認証に使用
+```
+
 #### セットアップ手順
 
 ```bash
-# 1. ホストでOAuth トークンを生成
+# 1. ホストで OAuth トークンを生成
 claude setup-token
 
-# 2. 生成されたトークンを環境変数に設定（.env や shell profile に追加）
-export CLAUDE_CODE_OAUTH_TOKEN="<生成されたトークン>"
+# 2. .env に保存（.gitignore 済み）
+CLAUDE_CODE_OAUTH_TOKEN=<生成されたトークン>
 ```
-
-#### devcontainer.json の設定
-
-```json
-{
-  "remoteEnv": {
-    "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN}"
-  }
-}
-```
-
-`${localEnv:...}` によりホストの環境変数が DevContainer 内に渡される。
 
 #### 参考: Claude Code 認証環境変数一覧
 
-| 環境変数 | 用途 |
-| --- | --- |
-| `ANTHROPIC_API_KEY` | API キー認証（API 課金） |
-| `CLAUDE_CODE_OAUTH_TOKEN` | `claude setup-token` で生成した長期 OAuth トークン（Max プラン向け） |
+| 環境変数 | 用途 | ソース |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | API キー認証（API 課金） | [env-vars](https://code.claude.com/docs/en/env-vars) |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `claude setup-token` で生成した長期 OAuth トークン（Max プラン向け） | [authentication](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token) |
 
 ソース: [Claude Code 環境変数ドキュメント](https://code.claude.com/docs/en/env-vars)
 

@@ -115,28 +115,25 @@ d151d705f073...
 
 `CLAUDE_CODE_OAUTH_TOKEN` 環境変数で認証する。API キーは不要。
 
+- `claude setup-token` で1年間有効な OAuth トークンを生成（[公式ドキュメント](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token)）
+- トークンは `.env` に保存 → `docker-compose.yml` で n8n コンテナに渡す → `devcontainer.json` の `remoteEnv` + `${localEnv:...}` で DevContainer に渡る
+- Max プランの OAuth トークンは macOS キーチェーンに保存されるため、ファイルマウント方式ではコンテナに渡せない。環境変数方式を採用（[環境変数リファレンス](https://code.claude.com/docs/en/env-vars)）
+
 ```bash
-# ホストでトークンを生成
+# トークン生成
 claude setup-token
 
-# 環境変数に設定
-export CLAUDE_CODE_OAUTH_TOKEN="<生成されたトークン>"
+# .env に保存
+CLAUDE_CODE_OAUTH_TOKEN=<生成されたトークン>
 ```
 
-`devcontainer.json` の `remoteEnv` でホスト環境変数をコンテナに渡す:
+> 詳細な検討経緯は [run-claude-design.md](run-claude-design.md) を参照。
 
-```json
-{
-  "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN}"
-}
-```
+### GitHub
 
-> 当初 `~/.claude/` のファイルマウントを検討したが、Max プランの OAuth トークンは macOS キーチェーンに保存されるためコンテナからアクセスできなかった。詳細は [run-claude-design.md](run-claude-design.md) を参照。
-
-### GitHub（Fine-grained PAT）
-
-- n8n: Credentials に PAT を登録（ワークフローの GitHub ノードで使用）
-- DevContainer: `GH_TOKEN` 環境変数で渡す（`devcontainer.json` の `remoteEnv` で設定済み）
+- **n8n GitHub ノード用**: Fine-grained PAT を n8n Credentials に登録（暗号化保存）
+- **DevContainer 内の gh CLI 用**: `GH_TOKEN` 環境変数で渡す（`devcontainer.json` の `remoteEnv`）
+- **n8n コンテナ内の git fetch 用**: `GH_TOKEN` で SSH → HTTPS 変換（`git config url.insteadOf`）
 
 ---
 

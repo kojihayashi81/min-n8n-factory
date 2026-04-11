@@ -19,33 +19,33 @@ n8n ワークフローから Claude Code を実行する際、ホスト環境を
 
 ## 認証方針
 
-`ANTHROPIC_API_KEY`（API 課金）は使わず、Max プランの OAuth リフレッシュトークンを環境変数で渡す。
+`ANTHROPIC_API_KEY`（API 課金）は使わず、Max プランの OAuth トークンを環境変数で渡す。
+
+- 公式ドキュメント: [Generate a long-lived token](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token)
+- 環境変数リファレンス: [Claude Code Environment Variables](https://code.claude.com/docs/en/env-vars)
 
 > **変更履歴**: 当初は `~/.claude/credentials.json` のファイルマウントを検討したが、Max プランの OAuth トークンは macOS キーチェーンに保存されるためコンテナからアクセスできなかった。`CLAUDE_CODE_OAUTH_TOKEN` 環境変数方式に変更。詳細は [run-claude-design.md](run-claude-design.md) を参照。
 
 ### セットアップ
 
 ```bash
-# 1. ホストでリフレッシュトークンを生成
+# 1. ホストで1年間有効な OAuth トークンを生成
 claude setup-token
 
-# 2. 環境変数に設定（.env や shell profile に追加）
-export CLAUDE_CODE_OAUTH_TOKEN="<生成されたトークン>"
+# 2. .env に保存（.gitignore 済み）
+CLAUDE_CODE_OAUTH_TOKEN=<生成されたトークン>
 ```
 
-### DevContainer への渡し方
+### トークンの流れ
 
-`devcontainer.json` の `remoteEnv` でホストの環境変数をコンテナに渡す:
-
-```json
-{
-  "remoteEnv": {
-    "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN}"
-  }
-}
+```text
+.env
+  → docker-compose.yml で n8n コンテナに渡す
+  → devcontainer.json の remoteEnv + ${localEnv:...} で DevContainer に渡る
+  → DevContainer 内の claude --print が認証に使用
 ```
 
-トークンが期限切れになったらホストで `claude setup-token` を再実行する。
+トークンが期限切れ（1年後）になったらホストで `claude setup-token` を再実行し、`.env` を更新する。
 
 ---
 
