@@ -92,6 +92,8 @@ make up
 
 → `http://localhost:5678` で n8n UI を開く
 
+> **セキュリティ注意:** n8n コンテナは Docker socket をマウントしており、ホスト上の全 Docker リソースを制御可能です。ローカル開発環境での使用を前提としており、外部公開する場合は Docker socket proxy の導入を検討してください。
+
 ---
 
 ## n8n Credentials 登録
@@ -162,14 +164,13 @@ GITHUB_REPO=owner/repo-name
 make setup-labels
 ```
 
-以下の5つのラベルが作成される:
+以下の4つのラベルが作成される:
 
 | ラベル | 意味 |
 | --- | --- |
 | `ai-ready` | 唯一のトリガー。人間のみが付与する |
 | `ai-processing` | AI 処理中。二重起動防止ガード |
-| `ai-review` | PR 作成済み・レビュー待ち |
-| `ai-done` | 完了 |
+| `ai-investigated` | 調査完了。Draft PR 作成済み・レビュー待ち |
 | `ai-failed` | エラー・タイムアウト。人間の介入が必要 |
 
 ### 3. Issue Form テンプレートを配布

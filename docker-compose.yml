@@ -1,6 +1,8 @@
 services:
   n8n:
-    image: n8nio/n8n:1.123.28
+    build:
+      context: .
+      dockerfile: Dockerfile.n8n
     restart: unless-stopped
     ports: ["5678:5678"]
     environment:
@@ -9,9 +11,16 @@ services:
       - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - GENERIC_TIMEZONE=Asia/Tokyo
-      - HOST_SSH_USER=${HOST_SSH_USER}
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=7
+      - EXECUTIONS_TIMEOUT=900
+      - GITHUB_REPO=${GITHUB_REPO}
+      - PROJECT_PATH=${PROJECT_PATH}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
+      - GH_TOKEN=${GH_TOKEN}
+      - CLAUDE_TIMEOUT_SEC=${CLAUDE_TIMEOUT_SEC:-600}
     volumes:
       - ./data/n8n:/home/node/.n8n
-      - ~/.ssh:/home/node/.ssh:ro
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PROJECT_PATH}:${PROJECT_PATH}
+      - ./scripts:/opt/scripts:ro

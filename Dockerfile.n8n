@@ -1,0 +1,27 @@
+FROM n8nio/n8n:1.123.28
+
+USER root
+
+# bash + git (scripts require bash; git for worktree operations)
+RUN apk add --no-cache bash git
+
+# docker CLI (static binary) + jq — auto-detect architecture
+ARG TARGETARCH
+RUN DOCKER_ARCH=$(case "$TARGETARCH" in amd64) echo x86_64;; arm64) echo aarch64;; *) echo "$TARGETARCH";; esac) && \
+    wget -q "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-27.5.1.tgz" -O /tmp/docker.tgz && \
+    tar xzf /tmp/docker.tgz --strip-components=1 -C /usr/local/bin docker/docker && \
+    rm /tmp/docker.tgz && \
+    JQ_ARCH=$(case "$TARGETARCH" in amd64) echo amd64;; arm64) echo arm64;; *) echo "$TARGETARCH";; esac) && \
+    wget -q "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-${JQ_ARCH}" -O /usr/local/bin/jq && \
+    chmod +x /usr/local/bin/jq
+
+# devcontainer CLI
+RUN npm install -g @devcontainers/cli && \
+    DC_JS=$(find /opt -name 'devcontainer.js' -path '*/@devcontainers/cli/*' 2>/dev/null | head -1) && \
+    printf '#!/bin/sh\nexec node "%s" "$@"\n' "$DC_JS" > /usr/local/bin/devcontainer && \
+    chmod +x /usr/local/bin/devcontainer
+
+# Allow node user to access Docker socket
+RUN addgroup node root
+
+USER node
