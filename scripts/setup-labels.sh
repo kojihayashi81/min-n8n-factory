@@ -12,8 +12,7 @@ REPO="$GITHUB_REPO"
 labels=(
   "ai-ready|#0075ca|Trigger: human assigns this to request AI processing"
   "ai-processing|#e4e669|AI is processing. Prevents duplicate runs"
-  "ai-review|#5319e7|PR created by AI. Waiting for human review"
-  "ai-done|#0e8a16|Merged and archived by AI"
+  "ai-investigated|#5319e7|Investigation complete. Draft PR created for review"
   "ai-failed|#d93f0b|Error or timeout. Human intervention required"
 )
 

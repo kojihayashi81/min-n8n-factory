@@ -3,98 +3,98 @@
 ## Architecture Overview
 
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│ Host (macOS)                                                 │
-│                                                              │
-│  .env (.gitignore'd)                                         │
-│  ┌──────────────────────────────────────────────┐            │
-│  │ N8N_BASIC_AUTH_USER / PASSWORD / KEY / API   │            │
-│  │ GITHUB_REPO=owner/repo ──────────────────────┼──┐         │
-│  │ PROJECT_PATH=/Users/.../gomoku-nextjs ───────┼──┤         │
-│  │ CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-... ────┼──┤         │
-│  └──────────────────────────────────────────────┘  │         │
-│         │                                          │         │
-│         │ docker-compose.yml                       │         │
-│         ▼                                          │         │
-│  ┌───────────────────────────────────────────────────────┐   │
-│  │ n8n Container (custom image)                          │   │
-│  │                                                       │   │
-│  │  Installed:                                           │   │
-│  │  ├─ n8n (base image)                                  │   │
-│  │  ├─ docker CLI    ← control host Docker               │   │
-│  │  ├─ git           ← create worktrees                  │   │
-│  │  └─ devcontainer CLI (via npm)                        │   │
-│  │                     ← start/exec DevContainers        │   │
-│  │                                                       │   │
-│  │  Volumes:                                             │   │
-│  │  ├─ /var/run/docker.sock ← host Docker socket         │   │
-│  │  └─ PROJECT_PATH:/repo   ← target repo (bind mount)  │   │
-│  │       ↑ used by git worktree add                      │   │
-│  │                                                       │   │
-│  │  Env:                                                 │   │
-│  │  ├─ N8N_*         → n8n internal config               │   │
-│  │  ├─ GITHUB_REPO   → workflow $env → GitHub nodes      │   │
-│  │  ├─ PROJECT_PATH  → workflow $env                     │   │
-│  │  │    → executeCommand: cd $PROJECT_PATH              │   │
-│  │  │    → git worktree add (on bind-mounted repo)       │   │
-│  │  │    → devcontainer up --workspace-folder (worktree) │   │
-│  │  └─ CLAUDE_CODE_OAUTH_TOKEN                           │   │
-│  │       → exported in shell                             │   │
-│  │       → devcontainer reads via ${localEnv:...}        │   │
-│  │       → passed into DevContainer env                  │   │
-│  │                                                       │   │
-│  │  Credentials (n8n UI, encrypted):                     │   │
-│  │  └─ GitHub PAT → used by GitHub nodes                 │   │
-│  │                                                       │   │
-│  │  ┌────────────────────────────────────────────────┐   │   │
-│  │  │ Workflow: AI Issue Processor                   │   │   │
-│  │  │                                                │   │   │
-│  │  │  Schedule 10min                                │   │   │
-│  │  │    → Get ai-ready Issue (GitHub node)          │   │   │
-│  │  │    → If (issue exists?)                        │   │   │
-│  │  │    → Set ai-processing label                   │   │   │
-│  │  │    → executeCommand:                           │   │   │
-│  │  │      ┌──────────────────────────────────────┐  │   │   │
-│  │  │      │ cd $PROJECT_PATH                     │  │   │   │
-│  │  │      │ 1. git worktree add .worktrees/...   │  │   │   │
-│  │  │      │ 2. devcontainer up --workspace-folder│  │   │   │
-│  │  │      │ 3. devcontainer exec                 │──┼───┼─┐ │
-│  │  │      │      claude --print "/investigate N" │  │   │ │ │
-│  │  │      └──────────────────────────────────────┘  │   │ │ │
-│  │  │    → Post PR Link to Issue                     │   │ │ │
-│  │  │    → Set ai-investigated label                 │   │ │ │
-│  │  └────────────────────────────────────────────────┘   │ │ │
-│  └───────────────────────────────────────────────────────┘ │ │
-│                                                            │ │
-│  Docker socket (/var/run/docker.sock)                      │ │
-│  ──────────────────────────────────────────────────────    │ │
-│                                                            ▼ │
-│  ┌───────────────────────────────────────────────────────┐   │
-│  │ DevContainer (self-contained)                         │   │
-│  │                                                       │   │
-│  │  Source: target repo's .devcontainer/                  │   │
-│  │  Workspace: /workspaces/issue-{N} (worktree mount)    │   │
-│  │                                                       │   │
-│  │  Pre-installed (via Dockerfile):                      │   │
-│  │  ├─ Claude Code CLI                                   │   │
-│  │  ├─ gh CLI                                            │   │
-│  │  └─ Node.js 22                                        │   │
-│  │                                                       │   │
-│  │  Pre-distributed (via setup-skills):                  │   │
-│  │  ├─ .claude/skills/investigate/SKILL.md                   │   │
-│  │  └─ .claude/scripts/save-investigation.sh             │   │
-│  │                                                       │   │
-│  │  Env (via devcontainer.json remoteEnv):               │   │
-│  │  ├─ CLAUDE_CODE_OAUTH_TOKEN ← ${localEnv:...}        │   │
-│  │  └─ GH_TOKEN                ← ${localEnv:...}        │   │
-│  │                                                       │   │
-│  │  Execution:                                           │   │
-│  │  claude --print --dangerously-skip-permissions        │   │
-│  │    → read issue → investigate                         │   │
-│  │    → save Markdown → git commit → git push            │   │
-│  │    → gh pr create → stdout: PR URL                    │   │
-│  └───────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│ Host (macOS)                                                   │
+│                                                                │
+│  .env (.gitignore'd)                                           │
+│  ┌────────────────────────────────────────────────┐            │
+│  │ N8N_BASIC_AUTH_USER / PASSWORD / KEY / API     │            │
+│  │ GITHUB_REPO=owner/repo ────────────────────────┼──┐         │
+│  │ PROJECT_PATH=/Users/.../target-repo ───────────┼──┤         │
+│  │ CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-... ──────┼──┤         │
+│  │ GH_TOKEN=github_pat_... ───────────────────────┼──┤         │
+│  └────────────────────────────────────────────────┘  │         │
+│         │                                            │         │
+│         │ docker-compose.yml                         │         │
+│         ▼                                            │         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ n8n Container (custom image)                            │   │
+│  │                                                         │   │
+│  │  Installed:                                             │   │
+│  │  ├─ n8n (base image)                                    │   │
+│  │  ├─ docker CLI      ← control host Docker               │   │
+│  │  ├─ bash + git      ← apk add                           │   │
+│  │  └─ devcontainer CLI (via npm)                          │   │
+│  │                       ← start/exec DevContainers        │   │
+│  │                                                         │   │
+│  │  Volumes:                                               │   │
+│  │  ├─ /var/run/docker.sock ← host Docker socket           │   │
+│  │  ├─ $PROJECT_PATH:$PROJECT_PATH ← target repo           │   │
+│  │  │    ↑ used by git worktree add                        │   │
+│  │  └─ ./scripts:/opt/scripts:ro ← run scripts             │   │
+│  │                                                         │   │
+│  │  Env:                                                   │   │
+│  │  ├─ N8N_*         → n8n internal config                 │   │
+│  │  ├─ GITHUB_REPO   → workflow $env → GitHub nodes        │   │
+│  │  ├─ PROJECT_PATH  → workflow $env                       │   │
+│  │  ├─ GH_TOKEN      → n8n-run-claude.sh (git auth)        │   │
+│  │  └─ CLAUDE_CODE_OAUTH_TOKEN                             │   │
+│  │       → devcontainer reads via ${localEnv:...}          │   │
+│  │       → passed into DevContainer env                    │   │
+│  │                                                         │   │
+│  │  Credentials (n8n UI, encrypted):                       │   │
+│  │  └─ GitHub PAT → used by GitHub nodes                   │   │
+│  │                                                         │   │
+│  │  ┌──────────────────────────────────────────────────┐   │   │
+│  │  │ Workflow: AI Issue Processor                     │   │   │
+│  │  │                                                  │   │   │
+│  │  │  Schedule 10min                                  │   │   │
+│  │  │    → Get ai-ready Issue (GitHub node)            │   │   │
+│  │  │    → If (exists & not ai-processing)             │   │   │
+│  │  │    → Set ai-processing label                     │   │   │
+│  │  │    → executeCommand:                             │   │   │
+│  │  │      ┌────────────────────────────────────────┐  │   │   │
+│  │  │      │ /opt/scripts/n8n-run-claude.sh N       │  │   │   │
+│  │  │      │  1. create-worktree.sh (idempotent)    │  │   │   │
+│  │  │      │  2. start-devcontainer.sh              │  │   │   │
+│  │  │      │  3. timeout + devcontainer exec        │──┼───┼─┐ │
+│  │  │      │      claude --print "/investigate N"   │  │   │ │ │
+│  │  │      │  4. cleanup-worktree.sh (on success)   │  │   │ │ │
+│  │  │      └────────────────────────────────────────┘  │   │ │ │
+│  │  │    → Post PR Link to Issue                       │   │ │ │
+│  │  │    → Set ai-investigated label                   │   │ │ │
+│  │  └──────────────────────────────────────────────────┘   │ │ │
+│  └─────────────────────────────────────────────────────────┘ │ │
+│                                                              │ │
+│  Docker socket (/var/run/docker.sock)                        │ │
+│  ────────────────────────────────────────────────────────    │ │
+│                                                              ▼ │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ DevContainer (self-contained)                           │   │
+│  │                                                         │   │
+│  │  Source: target repo's .devcontainer/                   │   │
+│  │  Workspace: /workspaces/issue-{N} (worktree mount)      │   │
+│  │                                                         │   │
+│  │  Pre-installed (via Dockerfile):                        │   │
+│  │  ├─ Claude Code CLI                                     │   │
+│  │  ├─ gh CLI                                              │   │
+│  │  └─ Node.js 22                                          │   │
+│  │                                                         │   │
+│  │  Pre-distributed (via setup-skills):                    │   │
+│  │  ├─ .claude/skills/investigate/SKILL.md                 │   │
+│  │  └─ .claude/scripts/save-investigation.sh               │   │
+│  │                                                         │   │
+│  │  Env (via devcontainer.json remoteEnv):                 │   │
+│  │  ├─ CLAUDE_CODE_OAUTH_TOKEN ← ${localEnv:...}           │   │
+│  │  └─ GH_TOKEN                ← ${localEnv:...}           │   │
+│  │                                                         │   │
+│  │  Execution:                                             │   │
+│  │  claude --print --dangerously-skip-permissions          │   │
+│  │    → read issue → investigate                           │   │
+│  │    → save Markdown → git commit → git push              │   │
+│  │    → gh pr create → stdout: PR URL                      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ## 必要なコンポーネント
@@ -106,7 +106,8 @@
 | n8n | ワークフローエンジン | ベースイメージ (`n8nio/n8n:1.123.28`) |
 | docker CLI | Docker socket 経由でホストの Docker を操作 | 静的バイナリをダウンロード（Hardened Image のため `apk` 不可） |
 | jq | DevContainer 起動結果のパース | 静的バイナリをダウンロード |
-| git | 対象リポジトリに worktree を作成 | ベースイメージにプリインストール済み |
+| bash | スクリプト実行に必要 | `apk add --no-cache bash` |
+| git | 対象リポジトリに worktree を作成 | `apk add --no-cache git` |
 | Node.js + npm | devcontainer CLI の実行に必要 | ベースイメージにプリインストール済み |
 | @devcontainers/cli | DevContainer の起動・コマンド実行 | `npm install -g @devcontainers/cli` |
 
@@ -135,22 +136,23 @@
 ```text
  1. [n8n]          10分ごとにスケジュール起動
  2. [n8n]          GitHub ノード: ai-ready ラベルの最古 Issue を取得
- 3. [n8n]          Issue なし → 終了
+ 3. [n8n]          Issue なし or ai-processing 中 → 終了
  4. [n8n]          GitHub ノード: ai-processing ラベルを付与
- 5. [n8n]          executeCommand ノード（n8n コンテナ内で実行）:
-    [n8n]            cd $PROJECT_PATH（bind mount されたリポジトリ）
-    [n8n]            git worktree add → .worktrees/issue-{N} を作成
-    [n8n]            devcontainer up  → DevContainer をビルド/起動
-    [n8n]            devcontainer exec → DevContainer 内で claude 実行
+ 5. [n8n]          executeCommand: /opt/scripts/n8n-run-claude.sh {N}
+    [n8n]            5a. create-worktree.sh → .worktrees/issue-{N} を作成（冪等）
+    [n8n]            5b. start-devcontainer.sh → DevContainer をビルド/起動
+    [n8n]            5c. timeout + devcontainer exec → DevContainer 内で claude 実行
  6. [DevContainer]  claude が gh CLI で Issue 内容を取得
  7. [DevContainer]  claude が調査（Web 検索、コード分析）
  8. [DevContainer]  claude が Markdown を openspec/investigations/ に保存
  9. [DevContainer]  claude が issues/{N} ブランチにコミット & プッシュ
 10. [DevContainer]  claude が gh CLI で Draft PR を作成
 11. [DevContainer]  claude が PR URL を stdout に出力
-12. [n8n]          PR URL を Issue にコメント投稿
-13. [n8n]          ai-investigated ラベルを付与
+12. [n8n]          cleanup-worktree.sh → worktree 削除・DevContainer 停止
+13. [n8n]          PR URL を Issue にコメント投稿
+14. [n8n]          ai-investigated ラベルを付与
     （エラー時）    ai-failed ラベルを付与 + エラーコメント投稿
+                   （worktree は調査用に残す）
 ```
 
 ## トークン・認証の一覧
