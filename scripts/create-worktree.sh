@@ -7,16 +7,16 @@ PROJECT_PATH="${PROJECT_PATH:?Error: PROJECT_PATH is not set}"
 BRANCH_NAME="issues/${ISSUE_NUMBER}"
 WORKTREE_DIR="${PROJECT_PATH}/.worktrees/issue-${ISSUE_NUMBER}"
 
+cd "$PROJECT_PATH"
+
+# リモートの最新を取得（既存 worktree でも常に実行）
+git fetch origin
+
 # 既に worktree が存在する場合はパスだけ返す
 if [ -d "$WORKTREE_DIR" ]; then
   echo "$WORKTREE_DIR"
   exit 0
 fi
-
-cd "$PROJECT_PATH"
-
-# リモートの最新を取得
-git fetch origin
 
 # ブランチが既にリモートにあればチェックアウト、なければ main から作成
 if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then

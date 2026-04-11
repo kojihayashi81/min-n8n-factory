@@ -24,7 +24,8 @@
         "operation": "getAll",
         "owner": "={{ $env.GITHUB_REPO.split('/')[0] }}",
         "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
-        "returnAll": true,
+        "returnAll": false,
+        "limit": 100,
         "filters": {
           "labels": "ai-processing",
           "state": "open"

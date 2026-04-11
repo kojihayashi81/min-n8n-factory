@@ -5,11 +5,14 @@ USER root
 # bash + git (scripts require bash; git for worktree operations)
 RUN apk add --no-cache bash git
 
-# docker CLI (static binary) + jq
-RUN wget -q https://download.docker.com/linux/static/stable/aarch64/docker-27.5.1.tgz -O /tmp/docker.tgz && \
+# docker CLI (static binary) + jq — auto-detect architecture
+ARG TARGETARCH
+RUN DOCKER_ARCH=$(case "$TARGETARCH" in amd64) echo x86_64;; arm64) echo aarch64;; *) echo "$TARGETARCH";; esac) && \
+    wget -q "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-27.5.1.tgz" -O /tmp/docker.tgz && \
     tar xzf /tmp/docker.tgz --strip-components=1 -C /usr/local/bin docker/docker && \
     rm /tmp/docker.tgz && \
-    wget -q https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-arm64 -O /usr/local/bin/jq && \
+    JQ_ARCH=$(case "$TARGETARCH" in amd64) echo amd64;; arm64) echo arm64;; *) echo "$TARGETARCH";; esac) && \
+    wget -q "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-${JQ_ARCH}" -O /usr/local/bin/jq && \
     chmod +x /usr/local/bin/jq
 
 # devcontainer CLI

@@ -92,6 +92,8 @@ make up
 
 → `http://localhost:5678` で n8n UI を開く
 
+> **セキュリティ注意:** n8n コンテナは Docker socket をマウントしており、ホスト上の全 Docker リソースを制御可能です。ローカル開発環境での使用を前提としており、外部公開する場合は Docker socket proxy の導入を検討してください。
+
 ---
 
 ## n8n Credentials 登録
