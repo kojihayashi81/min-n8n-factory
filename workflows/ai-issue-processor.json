@@ -56,6 +56,16 @@
                 "operation": "true",
                 "singleValue": true
               }
+            },
+            {
+              "id": "condition-not-processing",
+              "leftValue": "={{ !($json.labels || []).map(l => l.name).includes('ai-processing') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
             }
           ],
           "combinator": "and"
@@ -91,7 +101,7 @@
     },
     {
       "parameters": {
-        "command": "={{ 'cd ' + $env.PROJECT_PATH + ' && git config url.\"https://' + $env.GH_TOKEN + '@github.com/\".insteadOf \"git@github.com:\" && git fetch origin && git worktree add .worktrees/issue-' + $('Get oldest ai-ready Issue').item.json.number + ' -b issues/' + $('Get oldest ai-ready Issue').item.json.number + ' origin/main 2>/dev/null; WORKTREE=' + $env.PROJECT_PATH + '/.worktrees/issue-' + $('Get oldest ai-ready Issue').item.json.number + ' && devcontainer up --workspace-folder $WORKTREE 2>&1 | tail -1 | jq -r .containerId >&2 && devcontainer exec --workspace-folder $WORKTREE -- claude --print --dangerously-skip-permissions \"/investigate ' + $('Get oldest ai-ready Issue').item.json.number + '\" < /dev/null' }}"
+        "command": "={{ '/opt/scripts/n8n-run-claude.sh ' + $('Get oldest ai-ready Issue').item.json.number }}"
       },
       "id": "node-run-claude",
       "name": "Run Claude Code",
@@ -200,7 +210,7 @@
     "Post PR Link to Issue": {
       "main": [
         [{"node": "Set ai-investigated label", "type": "main", "index": 0}],
-        [{"node": "Set ai-failed label", "type": "main", "index": 0}]
+        [{"node": "Set ai-investigated label", "type": "main", "index": 0}]
       ]
     },
     "Set ai-failed label": {
@@ -210,6 +220,7 @@
     }
   },
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "timeout": 660
   }
 }
