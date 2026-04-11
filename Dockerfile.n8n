@@ -1,0 +1,20 @@
+FROM n8nio/n8n:1.123.28
+
+USER root
+
+# docker CLI (static binary) + jq
+RUN wget -q https://download.docker.com/linux/static/stable/aarch64/docker-27.5.1.tgz -O /tmp/docker.tgz && \
+    tar xzf /tmp/docker.tgz --strip-components=1 -C /usr/local/bin docker/docker && \
+    rm /tmp/docker.tgz && \
+    wget -q https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-arm64 -O /usr/local/bin/jq && \
+    chmod +x /usr/local/bin/jq
+
+# devcontainer CLI
+RUN npm install -g @devcontainers/cli && \
+    printf '#!/bin/sh\nexec node /opt/nodejs/node-v24.13.1/lib/node_modules/@devcontainers/cli/devcontainer.js "$@"\n' > /usr/local/bin/devcontainer && \
+    chmod +x /usr/local/bin/devcontainer
+
+# Allow node user to access Docker socket
+RUN addgroup node root
+
+USER node

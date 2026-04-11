@@ -91,7 +91,7 @@
     },
     {
       "parameters": {
-        "command": "={{ 'echo \"TODO: claude 実行方法は未確定 - issue: ' + $('Get oldest ai-ready Issue').item.json.number + '\"' }}"
+        "command": "={{ 'cd ' + $env.PROJECT_PATH + ' && git config url.\"https://' + $env.GH_TOKEN + '@github.com/\".insteadOf \"git@github.com:\" && git fetch origin && git worktree add .worktrees/issue-' + $('Get oldest ai-ready Issue').item.json.number + ' -b issues/' + $('Get oldest ai-ready Issue').item.json.number + ' origin/main 2>/dev/null; WORKTREE=' + $env.PROJECT_PATH + '/.worktrees/issue-' + $('Get oldest ai-ready Issue').item.json.number + ' && devcontainer up --workspace-folder $WORKTREE 2>&1 | tail -1 | jq -r .containerId >&2 && devcontainer exec --workspace-folder $WORKTREE -- claude --print --dangerously-skip-permissions \"/investigate ' + $('Get oldest ai-ready Issue').item.json.number + '\" < /dev/null' }}"
       },
       "id": "node-run-claude",
       "name": "Run Claude Code",
@@ -125,7 +125,7 @@
         "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
         "issueNumber": "={{ $('Get oldest ai-ready Issue').item.json.number }}",
         "editFields": {
-          "labels": "ai-investigated"
+          "labels": [{"label": "ai-investigated"}]
         }
       },
       "id": "node-label-investigated",
@@ -143,7 +143,7 @@
         "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
         "issueNumber": "={{ $('Get oldest ai-ready Issue').item.json.number }}",
         "editFields": {
-          "labels": "ai-failed"
+          "labels": [{"label": "ai-failed"}]
         }
       },
       "id": "node-label-failed",
@@ -210,8 +210,6 @@
     }
   },
   "settings": {
-    "executionOrder": "v1",
-    "timeout": 660
-  },
-  "tags": []
+    "executionOrder": "v1"
+  }
 }

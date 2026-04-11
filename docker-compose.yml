@@ -1,6 +1,8 @@
 services:
   n8n:
-    image: n8nio/n8n:1.123.28
+    build:
+      context: .
+      dockerfile: Dockerfile.n8n
     restart: unless-stopped
     ports: ["5678:5678"]
     environment:
@@ -14,6 +16,9 @@ services:
       - EXECUTIONS_TIMEOUT=900
       - GITHUB_REPO=${GITHUB_REPO}
       - PROJECT_PATH=${PROJECT_PATH}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
+      - GH_TOKEN=${GH_TOKEN}
     volumes:
       - ./data/n8n:/home/node/.n8n
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${PROJECT_PATH}:${PROJECT_PATH}
