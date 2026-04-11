@@ -21,7 +21,7 @@
 | # | 項目 | 方針 |
 | --- | --- | --- |
 | 1 | Claude 認証 | `CLAUDE_CODE_OAUTH_TOKEN` 環境変数で渡す。`claude setup-token` で生成 |
-| 2 | DevContainer 内で claude 実行 | `devcontainer exec` で `claude --print --skip-permissions` を呼び出す |
+| 2 | DevContainer 内で claude 実行 | `devcontainer exec` で `claude --print --dangerously-skip-permissions` を呼び出す |
 | 3 | n8n → DevContainer の接続 | Docker socket マウント経由。n8n コンテナに `docker` CLI は不要（ホスト側スクリプトを使用） |
 
 ## 将来課題

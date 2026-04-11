@@ -81,7 +81,7 @@
 │  │  └─ Node.js 22                                        │   │
 │  │                                                       │   │
 │  │  Pre-distributed (via setup-skills):                  │   │
-│  │  ├─ .claude/commands/investigate.md                   │   │
+│  │  ├─ .claude/skills/investigate/SKILL.md                   │   │
 │  │  └─ .claude/scripts/save-investigation.sh             │   │
 │  │                                                       │   │
 │  │  Env (via devcontainer.json remoteEnv):               │   │
@@ -104,9 +104,10 @@
 | パッケージ | 目的 | インストール方法 |
 | --- | --- | --- |
 | n8n | ワークフローエンジン | ベースイメージ (`n8nio/n8n:1.123.28`) |
-| docker CLI | Docker socket 経由でホストの Docker を操作 | `apk add docker-cli` |
-| git | 対象リポジトリに worktree を作成 | `apk add git` |
-| Node.js + npm | devcontainer CLI の実行に必要 | `apk add nodejs npm` |
+| docker CLI | Docker socket 経由でホストの Docker を操作 | 静的バイナリをダウンロード（Hardened Image のため `apk` 不可） |
+| jq | DevContainer 起動結果のパース | 静的バイナリをダウンロード |
+| git | 対象リポジトリに worktree を作成 | ベースイメージにプリインストール済み |
+| Node.js + npm | devcontainer CLI の実行に必要 | ベースイメージにプリインストール済み |
 | @devcontainers/cli | DevContainer の起動・コマンド実行 | `npm install -g @devcontainers/cli` |
 
 ### docker-compose.yml の変更点
@@ -124,7 +125,7 @@
 | --- | --- | --- |
 | `.devcontainer/Dockerfile` | `make setup-devcontainer` | Claude CLI + gh CLI + Node.js |
 | `.devcontainer/devcontainer.json` | `make setup-devcontainer` | remoteEnv、postCreateCommand |
-| `.claude/commands/investigate.md` | `make setup-skills` | 調査スキル |
+| `.claude/skills/investigate/SKILL.md` | `make setup-skills` | 調査スキル |
 | `.claude/scripts/save-investigation.sh` | `make setup-skills` | 調査ノート保存 |
 | `.github/ISSUE_TEMPLATE/ai-task.yml` | `make setup-issue-template` | AI タスク用 Issue フォーム |
 | ラベル (ai-ready, ai-processing 等) | `make setup-labels` | ワークフロー状態管理 |

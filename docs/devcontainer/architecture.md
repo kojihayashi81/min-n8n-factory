@@ -68,7 +68,7 @@ min-n8n-factory/
 
 対象リポジトリ（例: gomoku-nextjs）
 ├── .devcontainer/              # setup-devcontainer で配布済み
-├── .claude/commands/           # setup-skills で配布済み
+├── .claude/skills/             # setup-skills で配布済み
 ├── .worktrees/                 # .gitignore に追加
 │   ├── issue-2/                # Issue #2 用の作業コピー
 │   └── issue-5/                # Issue #5 用の作業コピー（並列実行時）
