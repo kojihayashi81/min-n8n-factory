@@ -12,5 +12,8 @@ services:
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=7
       - EXECUTIONS_TIMEOUT=900
+      - GITHUB_REPO=${GITHUB_REPO}
+      - PROJECT_PATH=${PROJECT_PATH}
     volumes:
       - ./data/n8n:/home/node/.n8n
+      - /var/run/docker.sock:/var/run/docker.sock

@@ -4,6 +4,8 @@
     "dockerfile": "Dockerfile"
   },
   "remoteEnv": {
-    "GH_TOKEN": "${localEnv:GH_TOKEN}"
-  }
+    "GH_TOKEN": "${localEnv:GH_TOKEN}",
+    "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN}"
+  },
+  "postCreateCommand": "git config --global user.name 'AI Agent' && git config --global user.email 'ai-agent@noreply.github.com'"
 }
