@@ -52,3 +52,4 @@ eval $(op signin) && make auth
 | `make up` | n8n 起動 |
 | `make down` | n8n 停止 |
 | `make auth` | GitHub CLI 認証（1Password 連携） |
+~

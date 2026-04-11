@@ -19,30 +19,33 @@ n8n ワークフローから Claude Code を実行する際、ホスト環境を
 
 ## 認証方針
 
-`ANTHROPIC_API_KEY`（API 課金）は使わず、Max プランの OAuth 認証情報を使う。
+`ANTHROPIC_API_KEY`（API 課金）は使わず、Max プランの OAuth リフレッシュトークンを環境変数で渡す。
+
+> **変更履歴**: 当初は `~/.claude/credentials.json` のファイルマウントを検討したが、Max プランの OAuth トークンは macOS キーチェーンに保存されるためコンテナからアクセスできなかった。`CLAUDE_CODE_OAUTH_TOKEN` 環境変数方式に変更。詳細は [run-claude-design.md](run-claude-design.md) を参照。
 
 ### セットアップ
 
 ```bash
-mkdir -p ./data/claude-auth
-cp ~/.claude/credentials.json ./data/claude-auth/credentials.json
+# 1. ホストでリフレッシュトークンを生成
+claude setup-token
+
+# 2. 環境変数に設定（.env や shell profile に追加）
+export CLAUDE_CODE_OAUTH_TOKEN="<生成されたトークン>"
 ```
 
-- `data/` は `.gitignore` 済みなので誤 commit しない
-- **ディレクトリごとマウントしない**（対象リポジトリの `.claude/` 設定・会話履歴を上書きするため）
-- `credentials.json` のみをマウントして最小限の権限にする
+### DevContainer への渡し方
 
-### n8n からの渡し方
+`devcontainer.json` の `remoteEnv` でホストの環境変数をコンテナに渡す:
 
-```bash
-docker run --rm \
-  -v $(pwd)/data/claude-auth/credentials.json:/home/node/.claude/credentials.json:ro \
-  -e GH_TOKEN=$GH_TOKEN \
-  ghcr.io/owner/repo:latest \
-  claude --print ...
+```json
+{
+  "remoteEnv": {
+    "CLAUDE_CODE_OAUTH_TOKEN": "${localEnv:CLAUDE_CODE_OAUTH_TOKEN}"
+  }
+}
 ```
 
-認証トークンが期限切れになったらホストで `claude auth login` を再実行し、`credentials.json` を再コピーする。
+トークンが期限切れになったらホストで `claude setup-token` を再実行する。
 
 ---
 
