@@ -2,6 +2,10 @@
 
 n8n を使って GitHub Issue から Claude Code を自動実行するローカル AI 工場。
 
+## 背景
+
+設計思想のベースの考え方は [llm-factory](https://github.com/kojihayashi81/llm-factory) にある。本来は Mac Studio 128GB + ローカル LLM（Ollama 70B）+ RAG で自律開発環境を構築する計画だったが、Apple Silicon Mac の入手に時間がかかるため、手持ちの Mac + Claude Code + n8n で先に自動化ワークフローを組み立てている。ローカル LLM を使わない分、構成はシンプルになっている。
+
 ## 必要ツール
 
 - Docker
