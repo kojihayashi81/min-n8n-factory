@@ -95,6 +95,18 @@ devcontainer exec \
 | `--print` | 非対話モード。結果を stdout に出力 |
 | `--dangerously-skip-permissions` | ツール実行の承認プロンプトを抑制。DevContainer で隔離されているため安全 |
 
+### `--allowedTools` への移行検討
+
+現在は `--dangerously-skip-permissions` で全ツール承認をスキップしているが、将来的には `--allowedTools` でツールを限定する方が安全。investigate スキルの `SKILL.md` frontmatter に `allowed-tools` を定義済みなので、移行時はこれを参照すること。
+
+```bash
+# 将来の移行先（--dangerously-skip-permissions を置き換え）
+claude --print --allowedTools "Read,Grep,Glob,Bash(git *),Bash(gh *),Bash(cat *),Bash(bash *),Bash(mkdir *),WebSearch,Write" \
+  "/investigate <issue-number>"
+```
+
+スキルの `allowed-tools` を変更した場合は、n8n スクリプト（`scripts/n8n-run-claude.sh`）の `--allowedTools` も合わせて更新すること。
+
 ---
 
 ## 4. スクリプト構成
