@@ -101,13 +101,25 @@
     },
     {
       "parameters": {
+        "command": "={{ 'node /opt/scripts/slack-notify.js ' + encodeURIComponent(JSON.stringify({type: 'start', issueNumber: $('Get oldest ai-ready Issue').item.json.number, issueTitle: $('Get oldest ai-ready Issue').item.json.title})) }}"
+      },
+      "id": "node-slack-start",
+      "name": "Slack: 処理開始",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [912, 208],
+      "onError": "continueRegularOutput",
+      "notes": "親メッセージを投稿し ts を stdout に出力。スレッド返信で使用する"
+    },
+    {
+      "parameters": {
         "command": "={{ '/opt/scripts/n8n-run-claude.sh ' + $('Get oldest ai-ready Issue').item.json.number }}"
       },
       "id": "node-run-claude",
       "name": "Run Claude Code",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [912, 208],
+      "position": [1120, 208],
       "onError": "continueErrorOutput",
       "notes": "stdout: PR URL / stderr: --verbose ツール呼び出しログ（n8n Executions に7日間保存）"
     },
@@ -123,7 +135,7 @@
       "name": "Post PR Link to Issue",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1104, 208],
+      "position": [1328, 108],
       "onError": "continueErrorOutput",
       "credentials": {}
     },
@@ -142,8 +154,20 @@
       "name": "Set ai-investigated label",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1300, 200],
+      "position": [1536, 108],
       "credentials": {}
+    },
+    {
+      "parameters": {
+        "command": "={{ 'node /opt/scripts/slack-notify.js ' + encodeURIComponent(JSON.stringify({type: 'success', issueNumber: $('Get oldest ai-ready Issue').item.json.number, issueTitle: $('Get oldest ai-ready Issue').item.json.title, threadTs: $('Slack: 処理開始').item.json.stdout.trim(), prUrl: $('Run Claude Code').item.json.stdout.trim()})) }}"
+      },
+      "id": "node-slack-success",
+      "name": "Slack: 調査完了",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1744, 108],
+      "onError": "continueRegularOutput",
+      "notes": "成功時のスレッド返信（Issue / PR ボタン付き）"
     },
     {
       "parameters": {
@@ -160,7 +184,7 @@
       "name": "Set ai-failed label",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1100, 420],
+      "position": [1328, 420],
       "credentials": {}
     },
     {
@@ -176,8 +200,20 @@
       "name": "Post Error Comment",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1300, 420],
+      "position": [1536, 420],
       "credentials": {}
+    },
+    {
+      "parameters": {
+        "command": "={{ 'node /opt/scripts/slack-notify.js ' + encodeURIComponent(JSON.stringify({type: 'failure', issueNumber: $('Get oldest ai-ready Issue').item.json.number, issueTitle: $('Get oldest ai-ready Issue').item.json.title, threadTs: $('Slack: 処理開始').item.json.stdout.trim(), error: $('Run Claude Code').item.json.stderr || 'タイムアウト（' + ($env.CLAUDE_TIMEOUT_SEC || '600') + '秒）', executionUrl: 'http://localhost:5678/workflow/' + $workflow.id + '/executions/' + $execution.id})) }}"
+      },
+      "id": "node-slack-failure",
+      "name": "Slack: 処理失敗",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1744, 420],
+      "onError": "continueRegularOutput",
+      "notes": "失敗時のスレッド返信（エラー詳細 + リトライ案内 + n8n実行ログボタン付き）"
     }
   ],
   "connections": {
@@ -198,6 +234,11 @@
     },
     "Set ai-processing label": {
       "main": [
+        [{"node": "Slack: 処理開始", "type": "main", "index": 0}]
+      ]
+    },
+    "Slack: 処理開始": {
+      "main": [
         [{"node": "Run Claude Code", "type": "main", "index": 0}]
       ]
     },
@@ -213,9 +254,19 @@
         [{"node": "Set ai-investigated label", "type": "main", "index": 0}]
       ]
     },
+    "Set ai-investigated label": {
+      "main": [
+        [{"node": "Slack: 調査完了", "type": "main", "index": 0}]
+      ]
+    },
     "Set ai-failed label": {
       "main": [
         [{"node": "Post Error Comment", "type": "main", "index": 0}]
+      ]
+    },
+    "Post Error Comment": {
+      "main": [
+        [{"node": "Slack: 処理失敗", "type": "main", "index": 0}]
       ]
     }
   },

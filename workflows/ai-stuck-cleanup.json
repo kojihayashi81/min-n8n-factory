@@ -100,6 +100,18 @@
       "typeVersion": 1,
       "position": [900, 200],
       "credentials": {}
+    },
+    {
+      "parameters": {
+        "command": "={{ 'node /opt/scripts/slack-notify.js ' + encodeURIComponent(JSON.stringify({type: 'stuck', issueNumber: $('Stale? (updated_at > TIMEOUT)').item.json.number, issueTitle: $('Stale? (updated_at > TIMEOUT)').item.json.title, updatedAt: $('Stale? (updated_at > TIMEOUT)').item.json.updated_at, timeoutSec: $env.CLAUDE_TIMEOUT_SEC || '600'})) }}"
+      },
+      "id": "node-slack-stuck",
+      "name": "Slack: スタック検知",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1100, 200],
+      "onError": "continueRegularOutput",
+      "notes": "スタック検知時にチャンネルに直接投稿（スレッドなし）"
     }
   ],
   "connections": {
@@ -122,6 +134,11 @@
     "Set ai-failed label": {
       "main": [
         [{"node": "Post Stuck Comment", "type": "main", "index": 0}]
+      ]
+    },
+    "Post Stuck Comment": {
+      "main": [
+        [{"node": "Slack: スタック検知", "type": "main", "index": 0}]
       ]
     }
   },
