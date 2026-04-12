@@ -221,7 +221,7 @@ function createServer(): McpServer {
 const app = express();
 app.use(express.json());
 
-// Host header validation for DNS rebinding protection
+// Host & Origin header validation for DNS rebinding protection
 const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 app.use((req, res, next) => {
   const host = req.headers.host;
@@ -233,6 +233,19 @@ app.use((req, res, next) => {
   if (!ALLOWED_HOSTS.has(hostname)) {
     res.status(403).json({ error: "Forbidden: invalid host" });
     return;
+  }
+  const origin = req.headers.origin;
+  if (origin) {
+    try {
+      const url = new URL(origin);
+      if (!ALLOWED_HOSTS.has(url.hostname)) {
+        res.status(403).json({ error: "Forbidden: invalid origin" });
+        return;
+      }
+    } catch {
+      res.status(403).json({ error: "Forbidden: malformed origin" });
+      return;
+    }
   }
   next();
 });

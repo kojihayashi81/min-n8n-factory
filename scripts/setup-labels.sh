@@ -29,7 +29,7 @@ for i in $(seq 0 $((count - 1))); do
 
   color="${color#\#}"
 
-  if gh label list --repo "$REPO" --limit 100 --json name -q '.[].name' | grep -qx "${name}"; then
+  if gh label list --repo "$REPO" --limit 100 --json name -q '.[].name' | grep -qxF "${name}"; then
     echo "skip: ${name} already exists"
   else
     gh label create "$name" --color "$color" --description "$description" --repo "$REPO"

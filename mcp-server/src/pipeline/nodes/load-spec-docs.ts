@@ -39,6 +39,9 @@ async function collectMarkdownFiles(
   return results;
 }
 
+/** Prefixes to skip when auto-discovering spec docs (internal/meta docs) */
+const EXCLUDED_DOC_PREFIXES = ["docs/mcp/"];
+
 /** Load spec documents from workspace (auto-discover docs/ + README.md) */
 export async function loadSpecDocs(root: string): Promise<SpecDoc[]> {
   const targets: string[] = [];
@@ -47,9 +50,16 @@ export async function loadSpecDocs(root: string): Promise<SpecDoc[]> {
     targets.push("README.md");
   }
 
-  // Auto-discover .md files under docs/
+  // Auto-discover .md files under docs/ (excluding internal docs)
+  const allDocs = await collectMarkdownFiles(
+    path.join(root, "docs"),
+    root,
+    "docs/"
+  );
   targets.push(
-    ...(await collectMarkdownFiles(path.join(root, "docs"), root, "docs/"))
+    ...allDocs.filter(
+      (p) => !EXCLUDED_DOC_PREFIXES.some((prefix) => p.startsWith(prefix))
+    )
   );
 
   const docs: SpecDoc[] = [];

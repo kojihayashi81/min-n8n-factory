@@ -80,6 +80,8 @@ export function explainTopic(
 
   const matchesAny = (text: string) =>
     terms.some((t) => text.toLowerCase().includes(t));
+  const matchesResource = (res: ResourceEntry) =>
+    matchesAny(res.title) || matchesAny(res.summary) || matchesAny(res.content);
 
   const specSections: { title: string; content: string; source: string }[] = [];
   const derivedSections: {
@@ -90,7 +92,7 @@ export function explainTopic(
   const relatedFiles = new Set<string>();
 
   for (const res of result.resources) {
-    if (!matchesAny(res.title) && !matchesAny(res.content)) continue;
+    if (!matchesResource(res)) continue;
 
     const section = {
       title: res.title,
