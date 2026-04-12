@@ -65,7 +65,7 @@ make setup-devcontainer
 
 ### 処理フロー
 
-```
+```text
 gh repo clone → .devcontainer/devcontainer.json の有無を確認
       │
       ├─ あり（既存設定をマージ）
