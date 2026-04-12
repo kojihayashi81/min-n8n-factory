@@ -36,11 +36,6 @@ export async function loadMakefile(root: string): Promise<MakeTarget[]> {
     const targetMatch = line.match(/^([a-zA-Z_][\w-]*):/);
     if (targetMatch) {
       const name = targetMatch[1];
-      // Skip .PHONY
-      if (name === ".PHONY") {
-        pendingComments.length = 0;
-        continue;
-      }
 
       // Collect recipe lines (indented with tab)
       const recipeLines: string[] = [];

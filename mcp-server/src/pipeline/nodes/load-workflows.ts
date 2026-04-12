@@ -1,7 +1,23 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { WorkflowDef, WorkflowNode } from "../../lib/types.js";
+import { z } from "zod";
+import type { WorkflowDef } from "../../lib/types.js";
 import { isAllowedPath } from "../../lib/allowlist.js";
+
+const WorkflowNodeSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string(),
+  notes: z.string().optional(),
+  parameters: z.record(z.unknown()).default({}),
+});
+
+const WorkflowJsonSchema = z.object({
+  name: z.string().optional(),
+  nodes: z.array(WorkflowNodeSchema).default([]),
+  connections: z.record(z.unknown()).default({}),
+  settings: z.record(z.unknown()).default({}),
+});
 
 /** Load n8n workflow JSON files from workflows/ directory */
 export async function loadWorkflows(root: string): Promise<WorkflowDef[]> {
@@ -10,7 +26,10 @@ export async function loadWorkflows(root: string): Promise<WorkflowDef[]> {
   try {
     entries = await fs.readdir(dir);
   } catch (err) {
-    console.warn("[pipeline] Could not read workflows directory:", (err as Error).message);
+    console.warn(
+      "[pipeline] Could not read workflows directory:",
+      (err as Error).message
+    );
     return [];
   }
 
@@ -22,25 +41,19 @@ export async function loadWorkflows(root: string): Promise<WorkflowDef[]> {
     const full = path.join(dir, entry);
     try {
       const raw = await fs.readFile(full, "utf-8");
-      const parsed = JSON.parse(raw);
-      const nodes: WorkflowNode[] = (parsed.nodes ?? []).map(
-        (n: Record<string, unknown>) => ({
-          id: n.id as string,
-          name: n.name as string,
-          type: n.type as string,
-          notes: n.notes as string | undefined,
-          parameters: n.parameters as Record<string, unknown>,
-        })
-      );
+      const parsed = WorkflowJsonSchema.parse(JSON.parse(raw));
       defs.push({
         fileName: entry,
         name: parsed.name ?? entry,
-        nodes,
-        connections: parsed.connections ?? {},
-        settings: parsed.settings ?? {},
+        nodes: parsed.nodes,
+        connections: parsed.connections as Record<string, unknown>,
+        settings: parsed.settings as Record<string, unknown>,
       });
     } catch (err) {
-      console.warn(`[pipeline] Could not parse workflow ${entry}:`, (err as Error).message);
+      console.warn(
+        `[pipeline] Could not parse workflow ${entry}:`,
+        (err as Error).message
+      );
     }
   }
   return defs;
