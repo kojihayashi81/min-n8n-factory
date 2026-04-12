@@ -164,7 +164,7 @@ GITHUB_REPO=owner/repo-name
 make setup-labels
 ```
 
-以下の4つのラベルが作成される:
+以下の4つのラベルが作成される（定義元: [`labels.json`](/labels.json)）:
 
 | ラベル | 意味 |
 | --- | --- |

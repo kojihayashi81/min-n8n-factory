@@ -1,0 +1,26 @@
+[
+  {
+    "name": "ai-ready",
+    "color": "#0075ca",
+    "meaning": "唯一のトリガー。人間のみが付与する",
+    "description": "Trigger: human assigns this to request AI processing"
+  },
+  {
+    "name": "ai-processing",
+    "color": "#e4e669",
+    "meaning": "AI 処理中。二重起動防止ガード",
+    "description": "AI is processing. Prevents duplicate runs"
+  },
+  {
+    "name": "ai-investigated",
+    "color": "#5319e7",
+    "meaning": "調査完了。Draft PR 作成済み・レビュー待ち",
+    "description": "Investigation complete. Draft PR created for review"
+  },
+  {
+    "name": "ai-failed",
+    "color": "#d93f0b",
+    "meaning": "エラー・タイムアウト。人間の介入が必要",
+    "description": "Error or timeout. Human intervention required"
+  }
+]
