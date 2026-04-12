@@ -4,6 +4,7 @@
 
 - **1Password** を使用して PAT などの秘密情報を管理する
 - 1Password CLI (`op`) と 1Password アプリの連携を有効にしておく（Settings → Developer → 「Integrate with 1Password CLI」をオン）
+- **jq** がインストール済みであること（`make setup-labels` で使用）
 
 ```bash
 brew install 1password-cli
@@ -164,7 +165,7 @@ GITHUB_REPO=owner/repo-name
 make setup-labels
 ```
 
-以下の4つのラベルが作成される:
+以下の4つのラベルが作成される（定義元: [`labels.json`](/labels.json)）:
 
 | ラベル | 意味 |
 | --- | --- |

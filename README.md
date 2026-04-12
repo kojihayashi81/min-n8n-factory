@@ -28,7 +28,21 @@ make up
 
 → `http://localhost:5678` で n8n UI を開く
 
-詳細は [docs/setup.md](docs/setup.md) を参照。
+### MCP ドキュメントサーバー（オプション）
+
+プロジェクトのドキュメント・ワークフロー・スクリプトを MCP サーバー経由で Claude Code に公開する。Claude Code セッションから仕様確認や仕様と実装の差分検出ができる。
+
+> **Note:** `.mcp.json` に接続設定が含まれています。`make mcp-up` でサーバーを起動してから Claude Code セッションを開始してください。サーバー未起動時は MCP 接続エラーが表示されますが、他の機能には影響しません。
+
+```bash
+# 起動
+make mcp-up
+
+# 停止
+make mcp-down
+```
+
+詳細は [docs/mcp/README.md](docs/mcp/README.md) を参照。
 
 ## トラブルシュート
 
@@ -55,5 +69,6 @@ eval $(op signin) && make auth
 | `make setup` | `.env` を生成 |
 | `make up` | n8n 起動 |
 | `make down` | n8n 停止 |
+| `make mcp-up` | MCP ドキュメントサーバー起動 |
+| `make mcp-down` | MCP ドキュメントサーバー停止 |
 | `make auth` | GitHub CLI 認証（1Password 連携） |
-~

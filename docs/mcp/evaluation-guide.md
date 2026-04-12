@@ -1,0 +1,359 @@
+# MCP ドキュメントサーバー 精度評価ガイド
+
+このドキュメントは、`mcp-docs` サーバーのツール回答精度とパイプラインノード出力精度を評価するための手順をまとめたものである。
+
+---
+
+## 評価の全体構成
+
+精度評価は 3 層に分けて行う。下層から順に確認することで、問題の原因を切り分けやすくなる。
+
+```text
+Layer 3: エンドツーエンド評価
+  Claude Code セッションからツールを呼び出し、
+  実際のユースケースで期待する回答が得られるかを確認
+
+Layer 2: ツール回答精度評価
+  各ツール（search / explain / drift）に対して
+  テストケースを実行し、結果の正確性・網羅性・順序を検証
+
+Layer 1: パイプラインノード出力精度評価
+  各ノードの入力→出力を個別に検証し、
+  パース漏れ・要約の欠落・誤分類がないかを確認
+```
+
+下層の問題が上層に波及するため、Layer 1 → 2 → 3 の順で評価する。
+
+---
+
+## 前提
+
+- MCP サーバーが起動済みであること（`make mcp-up`）
+- Claude Code セッションで `/mcp` にサーバーが認識されていること
+- Layer 1, 2 の確認には `/health` エンドポイントやサーバーログも利用する
+
+---
+
+## Layer 1: パイプラインノード出力精度評価
+
+各パイプラインノードが正しく動作しているかを個別に検証する。
+
+### 1.1 評価方法
+
+ノードごとに「入力→期待する出力」を定義し、実際の出力と突き合わせる。確認方法は以下の 2 通りを併用する。
+
+- **サーバーログの確認**: 起動時のログ `[pipeline] Loaded: ...` で件数を確認
+- **リソース読み取り**: Claude Code から MCP リソースを読み取り、内容を確認
+
+### 1.2 ノード別チェックリスト
+
+#### `loadSpecDocs`
+
+| チェック項目 | 確認方法 | 期待値 |
+| --- | --- | --- |
+| 読み込み対象ファイル数 | サーバーログの spec docs 件数 | README.md, docs/setup.md, docs/claude-skills-best-practices.md が存在する分 |
+| タイトル抽出 | リソース `project://overview` の title | README.md の `#` 見出し |
+| 欠損ファイルのスキップ | 存在しないファイルがあってもエラーにならない | ログにエラーが出ない |
+
+**確認手順:**
+
+```bash
+# サーバーログで件数確認
+docker compose -f compose.mcp.yml logs mcp-docs | grep "pipeline"
+```
+
+Claude Code から:
+
+```text
+project://overview を読み取って、README.md の冒頭と一致するか確認
+```
+
+#### `loadMakefile`
+
+| チェック項目 | 確認方法 | 期待値 |
+| --- | --- | --- |
+| ターゲット数 | サーバーログの make targets 件数 | Makefile の実ターゲット数と一致（.PHONY を除く） |
+| コメントの紐づけ | リソース `project://commands/make` の各ターゲット | ターゲット直上の `#` コメントが説明として表示される |
+| レシピの取得 | 同上 | 各ターゲットのレシピが正しく含まれる |
+
+**確認手順:**
+
+Makefile のターゲット数を手動で数え、ログの件数と照合する。次に `project://commands/make` リソースの内容を開き、以下を確認:
+
+- ターゲット名が網羅されているか
+- コメントが正しいターゲットに紐づいているか（空行でリセットされるため、空行を挟むと紐づかなくなる）
+- レシピ（実行コマンド）が正しいか
+
+#### `loadWorkflows`
+
+| チェック項目 | 確認方法 | 期待値 |
+| --- | --- | --- |
+| ワークフロー数 | サーバーログの workflows 件数 | `workflows/*.json` のファイル数と一致 |
+| ノード抽出 | ワークフローリソースのノード一覧 | 各 JSON の `nodes` 配列と一致 |
+| コネクション | ワークフローリソースのフロー記述 | `connections` の内容が正しく反映されている |
+
+**確認手順:**
+
+```bash
+# ワークフローファイル数の確認
+ls workflows/*.json | wc -l
+```
+
+リソース `project://workflows/ai-issue-processor` を読み取り、実際の JSON と照合する。
+
+#### `buildMakeCommands`
+
+| チェック項目 | 期待値 |
+| --- | --- |
+| 全ターゲットが含まれるか | loadMakefile の出力と件数一致 |
+| コメントなしターゲット | 「(説明なし)」と表示される |
+| レシピのフォーマット | コードブロック内に正しく表示 |
+
+#### `buildWorkflowSummaries`
+
+| チェック項目 | 期待値 |
+| --- | --- |
+| 各ワークフローのノード一覧 | JSON の nodes と名前・型が一致 |
+| フローの記述 | connections が `A → B` 形式で正しく表現されている |
+| タイムアウト設定 | settings.timeout があれば表示される |
+| knownGaps | TODO を含むノードや notes 付きノードが gaps に含まれる |
+
+#### `buildLabelsLifecycle`
+
+| チェック項目 | 期待値 |
+| --- | --- |
+| 仕様ラベル | labels.json の定義（ai-ready, ai-processing, ai-investigated, ai-failed の 4 つ） |
+| 実装ラベル | ワークフロー JSON から実際に抽出されたラベルと一致 |
+| 乖離検出 | 仕様にあるが実装にないラベル、実装にあるが仕様にないラベルが knownGaps に含まれる |
+
+**確認ポイント:**
+
+ラベル定義の SSOT は `labels.json`。パイプラインが起動時に読み込み、`build-labels-lifecycle` と `build-drift-report` の両方で使用する。
+
+#### `buildDriftReport`
+
+| チェック項目 | 期待値 |
+| --- | --- |
+| ラベルドリフト | 仕様と実装のラベル差分が検出される |
+| TODO 検出 | ワークフローの command パラメータに `TODO` を含むノードが検出される |
+| make ドリフト | README に記載があるが Makefile にないターゲット、その逆が検出される |
+| severity 分類 | TODO → error、ラベル不一致 → warning、未記載 → info |
+
+---
+
+## Layer 2: ツール回答精度評価
+
+### 2.1 評価方法
+
+各ツールに対して「入力→期待する出力の特徴」をテストケースとして定義し、実際の出力を以下の観点で評価する。
+
+| 観点 | 説明 |
+| --- | --- |
+| **正確性** | 返却された情報が事実と一致するか |
+| **網羅性** | 関連する情報が漏れなく含まれているか |
+| **順序** | spec が derived より先に表示されるか（設計原則） |
+| **出典** | ソースファイルが正しく示されているか |
+| **ノイズ** | 無関係な情報が混入していないか |
+
+### 2.2 テストケース
+
+#### `search_project_knowledge`
+
+| # | 入力 | 期待する結果 | 評価観点 |
+| --- | --- | --- | --- |
+| S-1 | query: `セットアップ`, scope: `all` | project://setup (spec) が上位に来る | 順序: spec 優先 |
+| S-2 | query: `make`, scope: `all` | project://commands/make を含む | 正確性 |
+| S-3 | query: `ai-ready 状態遷移`, scope: `all` | project://labels/lifecycle を含む | 網羅性 |
+| S-4 | query: `セットアップ`, scope: `derived` | spec リソースが除外される | フィルタの正確性 |
+| S-5 | query: `存在しないキーワード`, scope: `all` | 「見つかりませんでした」のメッセージ | エッジケース |
+| S-6 | query: `ワークフロー`, scope: `all` | overview と workflow 系の複数リソース | 網羅性 |
+| S-7 | query: `タイムアウト`, scope: `all` | workflow 関連リソースがヒット | 正確性 |
+
+#### `explain_project_topic`
+
+| # | 入力 | 期待する結果 | 評価観点 |
+| --- | --- | --- | --- |
+| E-1 | topic: `セットアップ`, includeImpl: true | 仕様セクション → 実装セクションの順 | 順序 |
+| E-2 | topic: `セットアップ`, includeImpl: false | 仕様セクションのみ | フィルタ |
+| E-3 | topic: `ワークフロー`, includeImpl: true | overview + workflow summaries | 網羅性 |
+| E-4 | topic: `make`, includeImpl: true | spec(README) + derived(make commands) | 正確性・順序 |
+| E-5 | topic: `存在しないトピック`, includeImpl: true | 「見つかりませんでした」 | エッジケース |
+| E-6 | topic: `ラベル`, includeImpl: true | labels/lifecycle の内容を含む | 正確性 |
+
+#### `detect_doc_impl_drift`
+
+| # | 入力 | 期待する結果 | 評価観点 |
+| --- | --- | --- | --- |
+| D-1 | area: (省略) | 全領域の差分候補 | 網羅性 |
+| D-2 | area: `ラベル` | ラベル関連のみ | フィルタ |
+| D-3 | area: `make` | make コマンド関連のみ | フィルタ |
+| D-4 | area: `ワークフロー` | ワークフロー TODO のみ | フィルタ |
+| D-5 | area: `存在しない領域` | 「差分は検出されませんでした」 | エッジケース |
+
+### 2.3 判定基準
+
+各テストケースを以下の 3 段階で判定する。
+
+| 判定 | 基準 |
+| --- | --- |
+| **Pass** | 期待する結果の特徴をすべて満たす |
+| **Partial** | 主要な期待は満たすが、一部に不足・余剰がある |
+| **Fail** | 期待する結果と大きく異なる、または誤った情報を返す |
+
+---
+
+## Layer 3: エンドツーエンド評価
+
+### 3.1 評価方法
+
+Claude Code セッションから実際にツールを呼び出し、ユーザ視点で期待する回答が得られるかを確認する。
+
+### 3.2 シナリオ
+
+以下のシナリオを Claude Code セッションで実行し、回答を評価する。
+
+| # | ユーザの質問（Claude Code に投げる） | 使われるべきツール | 期待する回答の特徴 |
+| --- | --- | --- | --- |
+| U-1 | 「このプロジェクトのセットアップ手順を教えて」 | explain_project_topic または search | setup.md の内容に基づいた手順 |
+| U-2 | 「make コマンドの一覧を見せて」 | search_project_knowledge | Makefile のターゲットが網羅される |
+| U-3 | 「ai-ready ラベルを付けるとどうなる?」 | explain_project_topic | 状態遷移の説明（ai-ready → ai-processing → ...） |
+| U-4 | 「ドキュメントと実装にズレはある?」 | detect_doc_impl_drift | ドリフト候補と severity が表示される |
+| U-5 | 「ワークフローのタイムアウト設定はどうなっている?」 | search_project_knowledge | ワークフローの timeout 値を含む回答 |
+| U-6 | 「ai-stuck-cleanup ワークフローの処理フローを説明して」 | explain_project_topic | ノード一覧とフローが説明される |
+
+### 3.3 判定基準
+
+| 観点 | 基準 |
+| --- | --- |
+| ツール選択 | 質問に対して適切なツールが自動選択されたか |
+| 回答の正確性 | 返却された情報が現在のコードベースと一致するか |
+| 出典の明示 | ソースファイルが示されているか |
+| 仕様と実装の区別 | spec / derived の区別が回答に反映されているか |
+| 未確定事項の露出 | knownGaps や TODO が隠されていないか |
+
+---
+
+## 評価の実施手順
+
+### Step 1: 環境準備
+
+```bash
+make mcp-up
+# ログで起動を確認
+docker compose -f compose.mcp.yml logs mcp-docs
+```
+
+ヘルスチェック:
+
+```bash
+curl http://127.0.0.1:3100/health
+```
+
+期待するレスポンス:
+
+```json
+{"status":"ok","resources":N,"driftItems":M}
+```
+
+resources と driftItems の件数を記録する。
+
+### Step 2: Layer 1 実施
+
+サーバーログから以下を記録する:
+
+```text
+[pipeline] Loaded: X spec docs, Y make targets, Z workflows
+[pipeline] Generated: N resources, M drift items
+```
+
+各件数が実際のファイル数と一致するかを確認する。
+
+次に、Claude Code セッションから各リソースを読み取り、チェックリストに沿って内容を確認する。
+
+### Step 3: Layer 2 実施
+
+テストケース表の各ケースを順に実行する。
+
+Claude Code セッションで MCP ツールを直接呼び出す:
+
+```text
+mcp-docs の search_project_knowledge で「セットアップ」を検索して
+```
+
+結果を記録し、判定（Pass / Partial / Fail）を付ける。
+
+### Step 4: Layer 3 実施
+
+シナリオ表の各質問を Claude Code セッションに投げる。
+
+回答を記録し、判定基準に沿って評価する。
+
+### Step 5: 結果の集約
+
+以下の形式で結果をまとめる。
+
+```markdown
+## 評価結果サマリ
+
+実施日: YYYY-MM-DD
+サーバーバージョン: (commit hash)
+
+### Layer 1: パイプラインノード
+- loadSpecDocs: OK / NG (詳細)
+- loadMakefile: OK / NG (詳細)
+- loadWorkflows: OK / NG (詳細)
+- buildMakeCommands: OK / NG (詳細)
+- buildWorkflowSummaries: OK / NG (詳細)
+- buildLabelsLifecycle: OK / NG (詳細)
+- buildDriftReport: OK / NG (詳細)
+
+### Layer 2: ツール回答精度
+- search_project_knowledge: X/Y Pass
+- explain_project_topic: X/Y Pass
+- detect_doc_impl_drift: X/Y Pass
+
+### Layer 3: エンドツーエンド
+- U-1 ~ U-6: 各シナリオの判定
+
+### 発見した問題
+1. ...
+2. ...
+
+### 改善アクション
+1. ...
+2. ...
+```
+
+---
+
+## 既知の評価観点と改善候補
+
+実装を確認した結果、以下の点が精度に影響しうる。
+
+### 検索ロジック（search.ts）
+
+- **キーワードマッチ方式**: 現状は単純な部分文字列マッチ + 出現回数スコアリング。同義語や表記ゆれ（例:「setup」と「セットアップ」）には対応していない
+- **spec ブースト**: spec リソースのスコアを 1.5 倍にしている。このブースト率が適切かは実際のクエリで検証が必要
+
+### ラベル定義（labels.json → パイプライン）
+
+- ラベル定義は `labels.json` を SSOT とし、パイプライン起動時に読み込む構成に変更済み
+- `docs/setup.md` のテーブルは手動管理のため、labels.json と乖離する可能性はある（テーブルに SSOT 注記を付与済み）
+
+### ドリフト検出の範囲（build-drift-report.ts）
+
+- 現状の検出対象: ラベル定義、ワークフロー TODO、make ターゲット
+- 未対象: セットアップ手順とスクリプトの整合性、テンプレート配布物の整合性
+- 改善案: 検出ルールを段階的に追加する
+
+### Makefile パーサー（load-makefile.ts）
+
+- コメントの紐づけは「ターゲット直上の `#` 行」のみ。空行が挟まるとコメントがリセットされる
+- 複数行コメントは最後の行のみが採用される
+
+---
+
+## 関連資料
+
+- [MCP ドキュメントサーバー概要](./README.md)
+- [設計判断](./design.md)

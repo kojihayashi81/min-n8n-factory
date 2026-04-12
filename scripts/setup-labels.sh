@@ -8,23 +8,28 @@ if [ -z "$GITHUB_REPO" ]; then
 fi
 
 REPO="$GITHUB_REPO"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LABELS_JSON="${SCRIPT_DIR}/../labels.json"
 
-labels=(
-  "ai-ready|#0075ca|Trigger: human assigns this to request AI processing"
-  "ai-processing|#e4e669|AI is processing. Prevents duplicate runs"
-  "ai-investigated|#5319e7|Investigation complete. Draft PR created for review"
-  "ai-failed|#d93f0b|Error or timeout. Human intervention required"
-)
+if [ ! -f "$LABELS_JSON" ]; then
+  echo "Error: labels.json not found at ${LABELS_JSON}"
+  exit 1
+fi
 
-for entry in "${labels[@]}"; do
-  name="${entry%%|*}"
-  rest="${entry#*|}"
-  color="${rest%%|*}"
-  description="${rest#*|}"
+if ! command -v jq &> /dev/null; then
+  echo "Error: jq is required. Install with: brew install jq"
+  exit 1
+fi
+
+count=$(jq length "$LABELS_JSON")
+for i in $(seq 0 $((count - 1))); do
+  name=$(jq -r ".[$i].name" "$LABELS_JSON")
+  color=$(jq -r ".[$i].color" "$LABELS_JSON")
+  description=$(jq -r ".[$i].description" "$LABELS_JSON")
 
   color="${color#\#}"
 
-  if gh label list --repo "$REPO" --limit 100 --json name -q '.[].name' | grep -qx "${name}"; then
+  if gh label list --repo "$REPO" --limit 100 --json name -q '.[].name' | grep -qxF "${name}"; then
     echo "skip: ${name} already exists"
   else
     gh label create "$name" --color "$color" --description "$description" --repo "$REPO"
