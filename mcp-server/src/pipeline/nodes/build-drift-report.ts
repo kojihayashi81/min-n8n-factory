@@ -58,7 +58,16 @@ function detectWorkflowTodos(workflowDefs: WorkflowDef[]): DriftItem[] {
         items.push({
           area: "ワークフロー実装",
           docSays: `ワークフロー "${wf.name}" は完成済みの想定`,
-          implSays: `ノード "${node.name}" に TODO が残っている`,
+          implSays: `ノード "${node.name}" の command に TODO が残っている`,
+          severity: "error",
+          sourceFiles: [`workflows/${wf.fileName}`],
+        });
+      }
+      if (typeof node.notes === "string" && node.notes.includes("TODO")) {
+        items.push({
+          area: "ワークフロー実装",
+          docSays: `ワークフロー "${wf.name}" は完成済みの想定`,
+          implSays: `ノード "${node.name}" の notes に TODO が残っている`,
           severity: "error",
           sourceFiles: [`workflows/${wf.fileName}`],
         });

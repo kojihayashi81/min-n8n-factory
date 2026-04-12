@@ -35,6 +35,11 @@ export function buildLabelsLifecycle(
   generatedAt: string
 ): ResourceEntry {
   const implLabels = extractImplLabels(workflowDefs);
+  if (workflowDefs.length > 0 && implLabels.size === 0) {
+    console.warn(
+      "[pipeline] extractImplLabels returned 0 labels from workflows — n8n node structure may have changed"
+    );
+  }
   const specLabelNames = new Set(labelDefs.map((l) => l.name));
 
   const gaps: string[] = [];

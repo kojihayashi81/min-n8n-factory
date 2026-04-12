@@ -1,12 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { MakeTarget } from "../../lib/types.js";
+import { isAllowedPath } from "../../lib/allowlist.js";
 
 /**
  * Parse Makefile to extract targets with their comments and recipes.
  * Expects comment lines immediately above target definitions.
  */
 export async function loadMakefile(root: string): Promise<MakeTarget[]> {
+  if (!isAllowedPath("Makefile", root)) return [];
   const full = path.join(root, "Makefile");
   let content: string;
   try {
@@ -18,7 +20,7 @@ export async function loadMakefile(root: string): Promise<MakeTarget[]> {
 
   const lines = content.split("\n");
   const targets: MakeTarget[] = [];
-  let pendingComment = "";
+  const pendingComments: string[] = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -26,7 +28,7 @@ export async function loadMakefile(root: string): Promise<MakeTarget[]> {
     // Collect comment lines (# comment above target)
     const commentMatch = line.match(/^#\s*(.+)/);
     if (commentMatch) {
-      pendingComment = commentMatch[1].trim();
+      pendingComments.push(commentMatch[1].trim());
       continue;
     }
 
@@ -36,7 +38,7 @@ export async function loadMakefile(root: string): Promise<MakeTarget[]> {
       const name = targetMatch[1];
       // Skip .PHONY
       if (name === ".PHONY") {
-        pendingComment = "";
+        pendingComments.length = 0;
         continue;
       }
 
@@ -52,13 +54,13 @@ export async function loadMakefile(root: string): Promise<MakeTarget[]> {
 
       targets.push({
         name,
-        comment: pendingComment,
+        comment: pendingComments.join(" "),
         recipe: recipeLines.join("\n"),
       });
-      pendingComment = "";
+      pendingComments.length = 0;
     } else if (!line.trim()) {
-      // Blank line resets pending comment
-      pendingComment = "";
+      // Blank line resets pending comments
+      pendingComments.length = 0;
     }
   }
   return targets;

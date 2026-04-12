@@ -40,8 +40,9 @@ export function searchResources(
       .toLowerCase();
 
     for (const term of terms) {
-      const count = searchable.split(term).length - 1;
-      if (count > 0) relevance += count;
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const matches = searchable.match(new RegExp(escaped, "g"));
+      if (matches) relevance += matches.length;
     }
 
     if (relevance > 0) {

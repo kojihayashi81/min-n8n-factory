@@ -217,14 +217,15 @@ const app = express();
 app.use(express.json());
 
 // Host header validation for DNS rebinding protection
+const ALLOWED_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 app.use((req, res, next) => {
   const host = req.headers.host;
   if (!host) {
     res.status(403).json({ error: "Forbidden: missing host header" });
     return;
   }
-  const hostname = host.split(":")[0];
-  if (hostname !== "localhost" && hostname !== "127.0.0.1") {
+  const hostname = host.replace(/:\d+$/, "").replace(/^\[|\]$/g, "");
+  if (!ALLOWED_HOSTS.has(hostname)) {
     res.status(403).json({ error: "Forbidden: invalid host" });
     return;
   }
