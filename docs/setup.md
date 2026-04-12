@@ -4,6 +4,7 @@
 
 - **1Password** を使用して PAT などの秘密情報を管理する
 - 1Password CLI (`op`) と 1Password アプリの連携を有効にしておく（Settings → Developer → 「Integrate with 1Password CLI」をオン）
+- **jq** がインストール済みであること（`make setup-labels` で使用）
 
 ```bash
 brew install 1password-cli

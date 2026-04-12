@@ -122,13 +122,13 @@ ls workflows/*.json | wc -l
 
 | チェック項目 | 期待値 |
 | --- | --- |
-| 仕様ラベル | ai-ready, ai-processing, ai-review, ai-done, ai-failed の 5 つ |
+| 仕様ラベル | labels.json の定義（ai-ready, ai-processing, ai-investigated, ai-failed の 4 つ） |
 | 実装ラベル | ワークフロー JSON から実際に抽出されたラベルと一致 |
 | 乖離検出 | 仕様にあるが実装にないラベル、実装にあるが仕様にないラベルが knownGaps に含まれる |
 
-**重要な確認ポイント:**
+**確認ポイント:**
 
-仕様ラベルは `build-labels-lifecycle.ts` の `SPEC_LABELS` 定数にハードコードされている。`docs/setup.md` のラベル定義が変更された場合、コード側と乖離する。この仕組み自体がドリフトの原因になりうるため、定期的な確認が必要。
+ラベル定義の SSOT は `labels.json`。パイプラインが起動時に読み込み、`build-labels-lifecycle` と `build-drift-report` の両方で使用する。
 
 #### `buildDriftReport`
 
@@ -335,10 +335,10 @@ mcp-docs の search_project_knowledge で「セットアップ」を検索して
 - **キーワードマッチ方式**: 現状は単純な部分文字列マッチ + 出現回数スコアリング。同義語や表記ゆれ（例:「setup」と「セットアップ」）には対応していない
 - **spec ブースト**: spec リソースのスコアを 1.5 倍にしている。このブースト率が適切かは実際のクエリで検証が必要
 
-### ラベル定義のハードコード（build-labels-lifecycle.ts）
+### ラベル定義（labels.json → パイプライン）
 
-- `SPEC_LABELS` が定数としてコードにハードコードされている。`docs/setup.md` のラベル定義が変更された場合、コード側との乖離が発生する
-- 改善案: `docs/setup.md` からラベル定義を動的に抽出する
+- ラベル定義は `labels.json` を SSOT とし、パイプライン起動時に読み込む構成に変更済み
+- `docs/setup.md` のテーブルは手動管理のため、labels.json と乖離する可能性はある（テーブルに SSOT 注記を付与済み）
 
 ### ドリフト検出の範囲（build-drift-report.ts）
 
@@ -356,4 +356,4 @@ mcp-docs の search_project_knowledge で「セットアップ」を検索して
 ## 関連資料
 
 - [MCP ドキュメントサーバー概要](./README.md)
-- [設計案](./design.md)
+- [設計判断](./design.md)

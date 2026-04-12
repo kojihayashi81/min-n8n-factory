@@ -34,6 +34,7 @@ make mcp-down  # 停止
 
 `compose.mcp.yml` で read-only マウントしているファイルのみ。
 
+- `labels.json`
 - `README.md`
 - `docs/`
 - `workflows/`

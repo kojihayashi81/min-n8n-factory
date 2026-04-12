@@ -23,7 +23,7 @@
 | `project://setup` | `spec` | セットアップ手順 | `docs/setup.md` |
 | `project://skills` | `spec` | Claude Skills 運用方針 | `docs/claude-skills-best-practices.md` |
 | `project://commands/make` | `derived` | make ターゲット一覧と説明 | `Makefile` |
-| `project://labels/lifecycle` | `derived` | Issue ラベルと状態遷移の要約 | `docs/setup.md`, `workflows/*.json` |
+| `project://labels/lifecycle` | `derived` | Issue ラベルと状態遷移の要約 | `labels.json`, `workflows/*.json` |
 | `project://workflows/ai-issue-processor` | `derived` | 調査フローの説明 | `workflows/ai-issue-processor.json` |
 | `project://workflows/ai-stuck-cleanup` | `derived` | スタック検知と復旧フロー | `workflows/ai-stuck-cleanup.json` |
 | `project://drift-report` | `derived` | 仕様と実装の差分候補一覧 | `docs/`, `Makefile`, `workflows/` |
@@ -87,7 +87,7 @@
 起動時に実行される DAG 型パイプライン。3 フェーズで順に処理する。
 
 ```text
-Phase 1 (並列):  loadSpecDocs / loadMakefile / loadWorkflows
+Phase 1 (並列):  loadSpecDocs / loadMakefile / loadWorkflows / loadLabels
 Phase 2 (順次):  buildSpecResources → buildMakeCommands → buildWorkflowSummaries → buildLabelsLifecycle
 Phase 3 (順次):  buildDriftReport
 ```
@@ -99,10 +99,11 @@ Phase 3 (順次):  buildDriftReport
 | `loadSpecDocs` | README.md, docs/*.md | specDocs | `pipeline/nodes/load-spec-docs.ts` |
 | `loadMakefile` | Makefile | makeTargets | `pipeline/nodes/load-makefile.ts` |
 | `loadWorkflows` | workflows/*.json | workflowDefs | `pipeline/nodes/load-workflows.ts` |
+| `loadLabels` | labels.json | labelDefs | `pipeline/run-pipeline.ts` |
 | `buildMakeCommands` | makeTargets | makeResource | `pipeline/nodes/build-make-commands.ts` |
 | `buildWorkflowSummaries` | workflowDefs | workflowResources | `pipeline/nodes/build-workflow-summaries.ts` |
-| `buildLabelsLifecycle` | specDocs, workflowDefs | labelsResource | `pipeline/nodes/build-labels-lifecycle.ts` |
-| `buildDriftReport` | specDocs, makeTargets, workflowDefs | driftResource, driftItems | `pipeline/nodes/build-drift-report.ts` |
+| `buildLabelsLifecycle` | labelDefs, workflowDefs | labelsResource | `pipeline/nodes/build-labels-lifecycle.ts` |
+| `buildDriftReport` | labelDefs, specDocs, makeTargets, workflowDefs | driftResource, driftItems | `pipeline/nodes/build-drift-report.ts` |
 
 パイプラインのオーケストレーション: `mcp-server/src/pipeline/run-pipeline.ts`
 
