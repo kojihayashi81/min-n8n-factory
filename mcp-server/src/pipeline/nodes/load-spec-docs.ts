@@ -24,8 +24,8 @@ export async function loadSpecDocs(root: string): Promise<SpecDoc[]> {
     try {
       const content = await fs.readFile(full, "utf-8");
       docs.push({ path: rel, content, title: extractTitle(content, rel) });
-    } catch {
-      // File may not exist in mounted volume — skip
+    } catch (err) {
+      console.warn(`[pipeline] Could not read spec doc ${rel}:`, (err as Error).message);
     }
   }
   return docs;

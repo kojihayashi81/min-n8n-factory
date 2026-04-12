@@ -9,7 +9,8 @@ export async function loadWorkflows(root: string): Promise<WorkflowDef[]> {
   let entries: string[];
   try {
     entries = await fs.readdir(dir);
-  } catch {
+  } catch (err) {
+    console.warn("[pipeline] Could not read workflows directory:", (err as Error).message);
     return [];
   }
 
@@ -38,8 +39,8 @@ export async function loadWorkflows(root: string): Promise<WorkflowDef[]> {
         connections: parsed.connections ?? {},
         settings: parsed.settings ?? {},
       });
-    } catch {
-      // Skip malformed JSON
+    } catch (err) {
+      console.warn(`[pipeline] Could not parse workflow ${entry}:`, (err as Error).message);
     }
   }
   return defs;

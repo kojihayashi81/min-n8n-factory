@@ -8,6 +8,7 @@ const ALLOWED_PREFIXES = [
   "templates/",
   "scripts/",
   "Makefile",
+  "labels.json",
 ];
 
 /** Paths explicitly denied */
@@ -17,5 +18,5 @@ export function isAllowedPath(filePath: string, root: string): boolean {
   const rel = path.relative(root, path.resolve(root, filePath));
   if (rel.startsWith("..")) return false;
   if (DENIED_PATTERNS.some((p) => rel.startsWith(p))) return false;
-  return ALLOWED_PREFIXES.some((p) => rel.startsWith(p) || rel === p);
+  return ALLOWED_PREFIXES.some((p) => rel.startsWith(p));
 }

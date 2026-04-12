@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { PipelineResult, ResourceEntry, LabelDef } from "../lib/types.js";
+import { isAllowedPath } from "../lib/allowlist.js";
 import { loadSpecDocs } from "./nodes/load-spec-docs.js";
 import { loadMakefile } from "./nodes/load-makefile.js";
 import { loadWorkflows } from "./nodes/load-workflows.js";
@@ -11,7 +12,9 @@ import { buildDriftReport } from "./nodes/build-drift-report.js";
 
 /** Load label definitions from labels.json (SSOT) */
 async function loadLabels(root: string): Promise<LabelDef[]> {
-  const full = path.join(root, "labels.json");
+  const rel = "labels.json";
+  if (!isAllowedPath(rel, root)) return [];
+  const full = path.join(root, rel);
   try {
     const raw = await fs.readFile(full, "utf-8");
     return JSON.parse(raw) as LabelDef[];

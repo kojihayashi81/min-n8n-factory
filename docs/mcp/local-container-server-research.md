@@ -132,6 +132,8 @@ Express の代替として成立する。
 
 新規実装なら、`@modelcontextprotocol/server` を中心に始めるのが自然である。v1 世代の docs は `v1.x` branch 側に分かれているため、新しく作るローカル MCP サーバーは legacy 前提にしない方がよい。
 
+> **実装時の補足（2026-04-12）**: 実際の実装では上記の split packages ではなく、統合パッケージ `@modelcontextprotocol/sdk` を使用した。SDK のバージョンアップにより split packages が統合されたためである。
+
 ---
 
 ## 推奨アーキテクチャ
@@ -276,9 +278,7 @@ TypeScript SDK では `enableJsonResponse: true` により、SSE を使わず pl
 - 言語: TypeScript
 - Web: Express
 - MCP packages:
-  - `@modelcontextprotocol/server`
-  - `@modelcontextprotocol/node`
-  - `@modelcontextprotocol/express`
+  - `@modelcontextprotocol/sdk`（統合パッケージ。調査時の split packages は統合済み）
 - バリデーション: `zod` または Standard Schema 互換ライブラリ
 - 実行形態: `Streamable HTTP`
 - セッション: stateless

@@ -11,7 +11,8 @@ export async function loadMakefile(root: string): Promise<MakeTarget[]> {
   let content: string;
   try {
     content = await fs.readFile(full, "utf-8");
-  } catch {
+  } catch (err) {
+    console.warn("[pipeline] Could not read Makefile:", (err as Error).message);
     return [];
   }
 

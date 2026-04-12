@@ -219,12 +219,14 @@ app.use(express.json());
 // Host header validation for DNS rebinding protection
 app.use((req, res, next) => {
   const host = req.headers.host;
-  if (host) {
-    const hostname = host.split(":")[0];
-    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
-      res.status(403).json({ error: "Forbidden: invalid host" });
-      return;
-    }
+  if (!host) {
+    res.status(403).json({ error: "Forbidden: missing host header" });
+    return;
+  }
+  const hostname = host.split(":")[0];
+  if (hostname !== "localhost" && hostname !== "127.0.0.1") {
+    res.status(403).json({ error: "Forbidden: invalid host" });
+    return;
   }
   next();
 });
@@ -254,23 +256,19 @@ app.post("/mcp", async (req: Request, res: Response) => {
 });
 
 app.get("/mcp", (_req: Request, res: Response) => {
-  res.writeHead(405).end(
-    JSON.stringify({
-      jsonrpc: "2.0",
-      error: { code: -32000, message: "Method not allowed." },
-      id: null,
-    })
-  );
+  res.status(405).json({
+    jsonrpc: "2.0",
+    error: { code: -32000, message: "Method not allowed." },
+    id: null,
+  });
 });
 
 app.delete("/mcp", (_req: Request, res: Response) => {
-  res.writeHead(405).end(
-    JSON.stringify({
-      jsonrpc: "2.0",
-      error: { code: -32000, message: "Method not allowed." },
-      id: null,
-    })
-  );
+  res.status(405).json({
+    jsonrpc: "2.0",
+    error: { code: -32000, message: "Method not allowed." },
+    id: null,
+  });
 });
 
 // Health check endpoint
