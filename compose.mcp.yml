@@ -1,0 +1,17 @@
+services:
+  mcp-docs:
+    build: ./mcp-server
+    restart: "no"
+    ports:
+      - "127.0.0.1:3100:3100"
+    environment:
+      - MCP_PORT=3100
+      - MCP_ROOT=/workspace
+    volumes:
+      - ./labels.json:/workspace/labels.json:ro
+      - ./README.md:/workspace/README.md:ro
+      - ./docs:/workspace/docs:ro
+      - ./workflows:/workspace/workflows:ro
+      - ./templates:/workspace/templates:ro
+      - ./scripts:/workspace/scripts:ro
+      - ./Makefile:/workspace/Makefile:ro
