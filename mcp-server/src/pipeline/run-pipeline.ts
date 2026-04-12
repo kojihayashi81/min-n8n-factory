@@ -26,12 +26,18 @@ async function loadLabels(root: string): Promise<LabelDef[]> {
   const rel = "labels.json";
   if (!isAllowedPath(rel, root)) return [];
   const full = path.join(root, rel);
+  let raw: string;
   try {
-    const raw = await fs.readFile(full, "utf-8");
+    raw = await fs.readFile(full, "utf-8");
+  } catch {
+    console.warn("[pipeline] labels.json not found, skipping label loading");
+    return [];
+  }
+  try {
     return LabelDefSchema.parse(JSON.parse(raw));
   } catch (err) {
-    console.warn(
-      "[pipeline] labels.json is missing or invalid:",
+    console.error(
+      "[pipeline] labels.json is invalid:",
       (err as Error).message
     );
     return [];

@@ -10,10 +10,15 @@ const PORT = parseInt(process.env.MCP_PORT ?? "3100", 10);
 const ROOT = process.env.MCP_ROOT ?? "/workspace";
 
 /** Cached pipeline result */
-let pipelineResult: PipelineResult;
+let pipelineResult: PipelineResult | undefined;
 
 /** Create a fresh McpServer with all resources and tools registered */
 function createServer(): McpServer {
+  if (!pipelineResult) {
+    throw new Error("Pipeline not initialized");
+  }
+  const pipeline = pipelineResult;
+
   const server = new McpServer({
     name: "mcp-docs-server",
     version: "1.0.0",
@@ -22,7 +27,7 @@ function createServer(): McpServer {
   // ------------------------------------------------------------------
   // Resources: register each resource from pipeline output
   // ------------------------------------------------------------------
-  for (const res of pipelineResult.resources) {
+  for (const res of pipeline.resources) {
     server.registerResource(
       res.uri.replace("project://", ""),
       res.uri,
@@ -78,7 +83,7 @@ function createServer(): McpServer {
       },
     },
     async ({ query, scope }) => {
-      const results = searchResources(pipelineResult, query, scope);
+      const results = searchResources(pipeline, query, scope);
       if (results.length === 0) {
         return {
           content: [
@@ -131,7 +136,7 @@ function createServer(): McpServer {
       },
     },
     async ({ topic, includeImplementation }) => {
-      const result = explainTopic(pipelineResult, topic, includeImplementation);
+      const result = explainTopic(pipeline, topic, includeImplementation);
 
       if (
         result.specSections.length === 0 &&
@@ -200,7 +205,7 @@ function createServer(): McpServer {
       },
     },
     async ({ area }) => {
-      const text = formatDriftReport(pipelineResult.driftItems, area);
+      const text = formatDriftReport(pipeline.driftItems, area);
       return {
         content: [{ type: "text" as const, text }],
       };

@@ -6,7 +6,7 @@ import { isAllowedPath } from "../../lib/allowlist.js";
 /** Extract title from markdown content (first # heading or filename) */
 function extractTitle(content: string, filePath: string): string {
   const match = content.match(/^#\s+(.+)$/m);
-  return match ? match[1].trim() : path.basename(filePath);
+  return match?.[1]?.trim() || path.basename(filePath);
 }
 
 /** Recursively collect .md file paths under a directory */

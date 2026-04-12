@@ -4,13 +4,19 @@ import type { WorkflowDef, ResourceEntry } from "../../lib/types.js";
 function describeFlow(wf: WorkflowDef): string {
   const lines: string[] = [];
   for (const [from, targets] of Object.entries(wf.connections)) {
-    const main = (targets as { main?: { node: string }[][] }).main;
-    if (!main) continue;
-    for (let i = 0; i < main.length; i++) {
-      for (const conn of main[i]) {
-        const label = main.length > 1 ? ` (output ${i})` : "";
-        lines.push(`- ${from}${label} → ${conn.node}`);
+    try {
+      const main = (targets as { main?: { node: string }[][] }).main;
+      if (!main || !Array.isArray(main)) continue;
+      for (let i = 0; i < main.length; i++) {
+        if (!Array.isArray(main[i])) continue;
+        for (const conn of main[i]) {
+          if (!conn || typeof conn.node !== "string") continue;
+          const label = main.length > 1 ? ` (output ${i})` : "";
+          lines.push(`- ${from}${label} → ${conn.node}`);
+        }
       }
+    } catch {
+      console.warn(`[pipeline] Unexpected connection structure for node "${from}" in ${wf.fileName}`);
     }
   }
   return lines.join("\n");

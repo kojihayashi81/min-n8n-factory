@@ -21,7 +21,9 @@ export function extractImplLabels(defs: WorkflowDef[]): Set<string> {
         if (typeof editFields.labels === "string") {
           labels.add(editFields.labels);
         } else if (Array.isArray(editFields.labels)) {
-          for (const l of editFields.labels) labels.add(l.label);
+          for (const l of editFields.labels) {
+            if (l && typeof l.label === "string") labels.add(l.label);
+          }
         }
       }
     }

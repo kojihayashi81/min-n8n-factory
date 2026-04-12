@@ -89,7 +89,7 @@ function detectMakeDrift(
   const targetNames = new Set(makeTargets.map((t) => t.name));
 
   // Check if README mentions make targets that don't exist
-  const makeRefs = readme.content.matchAll(/`make\s+([\w-]+)`/g);
+  const makeRefs = readme.content.matchAll(/`make\s+([\w.-]+)`/g);
   for (const match of makeRefs) {
     const name = match[1];
     if (!targetNames.has(name)) {
@@ -106,7 +106,7 @@ function detectMakeDrift(
   // Check for undocumented make targets
   const readmeContent = readme.content;
   for (const target of makeTargets) {
-    if (!readmeContent.includes(`make ${target.name}`)) {
+    if (!new RegExp(`\`make\\s+${target.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\``).test(readmeContent)) {
       items.push({
         area: "make コマンド",
         docSays: `README.md に \`make ${target.name}\` の記載がない`,
