@@ -7,6 +7,7 @@ export interface LabelDef {
   color: string;
   meaning: string;
   description: string;
+  transitionsTo: string[];
 }
 
 /** A loaded spec document */

@@ -219,13 +219,12 @@ app.use(express.json());
 // Host header validation for DNS rebinding protection
 app.use((req, res, next) => {
   const host = req.headers.host;
-  if (
-    host &&
-    !host.startsWith("localhost") &&
-    !host.startsWith("127.0.0.1")
-  ) {
-    res.status(403).json({ error: "Forbidden: invalid host" });
-    return;
+  if (host) {
+    const hostname = host.split(":")[0];
+    if (hostname !== "localhost" && hostname !== "127.0.0.1") {
+      res.status(403).json({ error: "Forbidden: invalid host" });
+      return;
+    }
   }
   next();
 });

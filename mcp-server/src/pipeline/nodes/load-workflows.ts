@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { WorkflowDef, WorkflowNode } from "../../lib/types.js";
+import { isAllowedPath } from "../../lib/allowlist.js";
 
 /** Load n8n workflow JSON files from workflows/ directory */
 export async function loadWorkflows(root: string): Promise<WorkflowDef[]> {
@@ -15,6 +16,8 @@ export async function loadWorkflows(root: string): Promise<WorkflowDef[]> {
   const defs: WorkflowDef[] = [];
   for (const entry of entries) {
     if (!entry.endsWith(".json")) continue;
+    const rel = `workflows/${entry}`;
+    if (!isAllowedPath(rel, root)) continue;
     const full = path.join(dir, entry);
     try {
       const raw = await fs.readFile(full, "utf-8");

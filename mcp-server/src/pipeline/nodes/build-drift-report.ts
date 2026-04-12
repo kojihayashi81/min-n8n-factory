@@ -6,6 +6,7 @@ import type {
   ResourceEntry,
   DriftItem,
 } from "../../lib/types.js";
+import { extractImplLabels } from "./build-labels-lifecycle.js";
 
 /** Detect label drift between labels.json and workflow implementation */
 function detectLabelDrift(
@@ -14,30 +15,7 @@ function detectLabelDrift(
 ): DriftItem[] {
   const items: DriftItem[] = [];
 
-  // Extract labels from workflow JSON
-  const implLabels = new Set<string>();
-  for (const wf of workflowDefs) {
-    for (const node of wf.nodes) {
-      const params = node.parameters;
-      const filters = params.getRepositoryIssuesFilters as
-        | { labels?: string }
-        | undefined;
-      if (filters?.labels) implLabels.add(filters.labels);
-      const filters2 = params.filters as { labels?: string } | undefined;
-      if (filters2?.labels) implLabels.add(filters2.labels);
-      const editFields = params.editFields as
-        | { labels?: string | { label: string }[] }
-        | undefined;
-      if (editFields?.labels) {
-        if (typeof editFields.labels === "string") {
-          implLabels.add(editFields.labels);
-        } else if (Array.isArray(editFields.labels)) {
-          for (const l of editFields.labels) implLabels.add(l.label);
-        }
-      }
-    }
-  }
-
+  const implLabels = extractImplLabels(workflowDefs);
   const specLabels = new Set(labelDefs.map((l) => l.name));
 
   for (const label of implLabels) {

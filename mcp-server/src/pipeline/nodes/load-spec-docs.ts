@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { SpecDoc } from "../../lib/types.js";
+import { isAllowedPath } from "../../lib/allowlist.js";
 
 /** Extract title from markdown content (first # heading or filename) */
 function extractTitle(content: string, filePath: string): string {
@@ -18,6 +19,7 @@ export async function loadSpecDocs(root: string): Promise<SpecDoc[]> {
 
   const docs: SpecDoc[] = [];
   for (const rel of targets) {
+    if (!isAllowedPath(rel, root)) continue;
     const full = path.join(root, rel);
     try {
       const content = await fs.readFile(full, "utf-8");

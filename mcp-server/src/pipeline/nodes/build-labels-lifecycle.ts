@@ -1,7 +1,7 @@
 import type { LabelDef, WorkflowDef, ResourceEntry } from "../../lib/types.js";
 
 /** Extract labels actually used in workflow JSON */
-function extractImplLabels(defs: WorkflowDef[]): Set<string> {
+export function extractImplLabels(defs: WorkflowDef[]): Set<string> {
   const labels = new Set<string>();
   for (const wf of defs) {
     for (const node of wf.nodes) {
@@ -59,12 +59,19 @@ export function buildLabelsLifecycle(
     .map((l) => `| \`${l.name}\` | ${l.meaning} |`)
     .join("\n");
 
-  const transitions = [
-    "1. `ai-ready` → `ai-processing`（ワークフローが自動付与）",
-    "2. `ai-processing` → `ai-investigated`（調査完了・Draft PR 作成）",
-    "3. `ai-processing` → `ai-failed`（タイムアウトまたはエラー）",
-    "4. `ai-failed` → `ai-ready`（人間が手動で再試行）",
-  ].join("\n");
+  const meaningMap = new Map(labelDefs.map((l) => [l.name, l.meaning]));
+  let step = 0;
+  const transitionLines: string[] = [];
+  for (const label of labelDefs) {
+    for (const target of label.transitionsTo) {
+      step++;
+      const targetMeaning = meaningMap.get(target) ?? "";
+      transitionLines.push(
+        `${step}. \`${label.name}\` → \`${target}\`（${targetMeaning}）`
+      );
+    }
+  }
+  const transitions = transitionLines.join("\n");
 
   const content = [
     "# Issue ラベルと状態遷移",
