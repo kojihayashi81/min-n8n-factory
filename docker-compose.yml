@@ -13,14 +13,24 @@ services:
       - GENERIC_TIMEZONE=Asia/Tokyo
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=7
-      - EXECUTIONS_TIMEOUT=900
+      - EXECUTIONS_TIMEOUT=${WORKFLOW_TIMEOUT_SEC:-780}
       - GITHUB_REPO=${GITHUB_REPO}
       - PROJECT_PATH=${PROJECT_PATH}
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
       - GH_TOKEN=${GH_TOKEN}
       - CLAUDE_TIMEOUT_SEC=${CLAUDE_TIMEOUT_SEC:-600}
+      - WORKFLOW_TIMEOUT_SEC=${WORKFLOW_TIMEOUT_SEC:-780}
+      - STUCK_THRESHOLD_SEC=${STUCK_THRESHOLD_SEC:-1200}
+      - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
+      - EXECUTION_LOG_BASE_URL=${EXECUTION_LOG_BASE_URL:-http://localhost:5678}
+      - NODE_FUNCTION_ALLOW_EXTERNAL=slack-notify
+      # Resolve `require('slack-notify')` without coupling to n8n's
+      # internal node_modules layout. /opt/n8n-user-modules is a
+      # project-owned NODE_PATH prefix that survives n8n upgrades.
+      - NODE_PATH=/opt/n8n-user-modules/node_modules
     volumes:
       - ./data/n8n:/home/node/.n8n
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PROJECT_PATH}:${PROJECT_PATH}
       - ./scripts:/opt/scripts:ro
+      - ./scripts/slack-notify-pkg:/opt/n8n-user-modules/node_modules/slack-notify:ro

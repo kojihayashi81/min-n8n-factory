@@ -18,11 +18,17 @@ if [ -d "$WORKTREE_DIR" ]; then
   exit 0
 fi
 
-# ブランチが既にリモートにあればチェックアウト、なければ main から作成
-if git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
-  git worktree add "$WORKTREE_DIR" "$BRANCH_NAME"
+# ブランチ状態を判定して worktree を作成
+# 1. ローカルブランチが既存 → そのままチェックアウト
+# 2. リモートのみ存在 → リモートを追跡する新規ローカルブランチを作成
+# 3. どちらにも無い → origin/main から新規作成
+# git worktree add の stdout/stderr は全て stderr に流し、最後に path だけを stdout に出す
+if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
+  git worktree add "$WORKTREE_DIR" "$BRANCH_NAME" >&2
+elif git ls-remote --heads origin "$BRANCH_NAME" | grep -q "$BRANCH_NAME"; then
+  git worktree add --track -b "$BRANCH_NAME" "$WORKTREE_DIR" "origin/$BRANCH_NAME" >&2
 else
-  git worktree add "$WORKTREE_DIR" -b "$BRANCH_NAME" origin/main
+  git worktree add "$WORKTREE_DIR" -b "$BRANCH_NAME" origin/main >&2
 fi
 
 echo "$WORKTREE_DIR"

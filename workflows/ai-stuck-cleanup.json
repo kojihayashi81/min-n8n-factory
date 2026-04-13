@@ -16,17 +16,15 @@
       "name": "Schedule 30min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [100, 300]
+      "position": [112, 300]
     },
     {
       "parameters": {
-        "resource": "issue",
-        "operation": "getAll",
+        "resource": "repository",
         "owner": "={{ $env.GITHUB_REPO.split('/')[0] }}",
         "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
-        "returnAll": false,
         "limit": 100,
-        "filters": {
+        "getRepositoryIssuesFilters": {
           "labels": "ai-processing",
           "state": "open"
         }
@@ -35,7 +33,7 @@
       "name": "Get ai-processing Issues",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [300, 300],
+      "position": [332, 300],
       "credentials": {}
     },
     {
@@ -50,7 +48,7 @@
             {
               "id": "condition-stale",
               "leftValue": "={{ Math.floor((Date.now() - new Date($json.updated_at).getTime()) / 1000) }}",
-              "rightValue": "={{ $env.CLAUDE_TIMEOUT_SEC || 600 }}",
+              "rightValue": "={{ Number($env.STUCK_THRESHOLD_SEC || 1200) }}",
               "operator": {
                 "type": "number",
                 "operation": "gt"
@@ -64,7 +62,7 @@
       "name": "Stale? (updated_at > TIMEOUT)",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [500, 300],
+      "position": [552, 300],
       "notes": "最終更新からタイムアウト秒数以上経過した Issue をスタックと判定"
     },
     {
@@ -82,7 +80,7 @@
       "name": "Set ai-failed label",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [700, 200],
+      "position": [772, 200],
       "credentials": {}
     },
     {
@@ -98,8 +96,74 @@
       "name": "Post Stuck Comment",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [900, 200],
+      "position": [992, 200],
       "credentials": {}
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {"fieldToAggregate": "number", "renameField": false},
+            {"fieldToAggregate": "title", "renameField": false},
+            {"fieldToAggregate": "updated_at", "renameField": false}
+          ]
+        },
+        "options": {
+          "mergeLists": false
+        }
+      },
+      "id": "node-aggregate",
+      "name": "Aggregate Stuck Issues",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1212, 200],
+      "notes": "スタック検知済み Issue を1件にまとめてバッチ通知用に集約"
+    },
+    {
+      "parameters": {
+        "jsCode": "const t = require('slack-notify');\nconst agg = $input.first().json;\nconst issues = agg.number.map((n, i) => ({ number: n, title: agg.title[i], updatedAt: agg.updated_at[i] }));\nreturn [{ json: t.buildPayloadForContext({\n  kind: 'stuck-batch',\n  env: $env,\n  issues\n}) }];"
+      },
+      "id": "node-build-stuck-payload",
+      "name": "Build stuck-batch payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1432, 200],
+      "notes": "集約済み Issue リストから Block Kit バッチ通知を組み立てる"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.channel }}"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ $json.blocksJson }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $json.thread_ts }}",
+              "reply_broadcast": "={{ $json.reply_broadcast }}"
+            }
+          }
+        }
+      },
+      "id": "node-slack-stuck",
+      "name": "Slack: スタック検知 (一括)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [1652, 200],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "slackApi": {
+          "name": "Slack Bot"
+        }
+      },
+      "notes": "スタック検知済み Issue をまとめて1件のメッセージで通知"
     }
   ],
   "connections": {
@@ -123,11 +187,24 @@
       "main": [
         [{"node": "Post Stuck Comment", "type": "main", "index": 0}]
       ]
+    },
+    "Post Stuck Comment": {
+      "main": [
+        [{"node": "Aggregate Stuck Issues", "type": "main", "index": 0}]
+      ]
+    },
+    "Aggregate Stuck Issues": {
+      "main": [
+        [{"node": "Build stuck-batch payload", "type": "main", "index": 0}]
+      ]
+    },
+    "Build stuck-batch payload": {
+      "main": [
+        [{"node": "Slack: スタック検知 (一括)", "type": "main", "index": 0}]
+      ]
     }
   },
-  "active": false,
   "settings": {
     "executionOrder": "v1"
-  },
-  "tags": []
+  }
 }

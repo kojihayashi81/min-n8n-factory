@@ -4,6 +4,7 @@ set -euo pipefail
 ISSUE_NUMBER="${1:?Usage: n8n-run-claude.sh <issue-number>}"
 PROJECT_PATH="${PROJECT_PATH:?Error: PROJECT_PATH is not set}"
 GH_TOKEN="${GH_TOKEN:?Error: GH_TOKEN is not set}"
+CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:?Error: CLAUDE_CODE_OAUTH_TOKEN is not set}"
 CLAUDE_TIMEOUT_SEC="${CLAUDE_TIMEOUT_SEC:-600}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -21,12 +22,36 @@ echo "worktree: $WORKTREE_PATH" >&2
 "$SCRIPT_DIR/start-devcontainer.sh" "$WORKTREE_PATH" >&2
 
 # 3. Run Claude in DevContainer with timeout
-CLAUDE_OUTPUT=$(timeout "$CLAUDE_TIMEOUT_SEC" \
+# Pass CLAUDE_CODE_OAUTH_TOKEN and GH_TOKEN explicitly so the devcontainer's claude CLI can authenticate.
+# Capture stdout and stderr separately via temp files so a non-zero exit
+# still surfaces the actual error text to n8n (the script exits under
+# set -e before we would otherwise echo CLAUDE_OUTPUT).
+CLAUDE_STDOUT=$(mktemp)
+CLAUDE_STDERR=$(mktemp)
+trap 'rm -f "$CLAUDE_STDOUT" "$CLAUDE_STDERR"' EXIT
+
+set +e
+timeout "$CLAUDE_TIMEOUT_SEC" \
   devcontainer exec --workspace-folder "$WORKTREE_PATH" \
-  -- claude --print --dangerously-skip-permissions "/investigate $ISSUE_NUMBER" < /dev/null)
+  --remote-env "CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN" \
+  --remote-env "GH_TOKEN=$GH_TOKEN" \
+  -- claude --print --dangerously-skip-permissions "/investigate $ISSUE_NUMBER" \
+  < /dev/null \
+  > "$CLAUDE_STDOUT" 2> "$CLAUDE_STDERR"
+CLAUDE_EXIT=$?
+set -e
+
+if [ "$CLAUDE_EXIT" -ne 0 ]; then
+  echo "=== claude failed (exit=$CLAUDE_EXIT) ===" >&2
+  echo "--- stdout ---" >&2
+  cat "$CLAUDE_STDOUT" >&2
+  echo "--- stderr ---" >&2
+  cat "$CLAUDE_STDERR" >&2
+  exit "$CLAUDE_EXIT"
+fi
 
 # 4. Cleanup on success (on failure, keep worktree for investigation)
 "$SCRIPT_DIR/cleanup-worktree.sh" "$ISSUE_NUMBER"
 
 # Output result (stdout is captured by n8n)
-echo "$CLAUDE_OUTPUT"
+cat "$CLAUDE_STDOUT"

@@ -1,11 +1,18 @@
-FROM n8nio/n8n:1.123.28
+FROM alpine:3.22 AS tools
 
-USER root
+# Install bash + git in a clean Alpine stage that has apk available.
+# apk upgrade picks up CVE patches on top of the 3.22 base.
+# apk itself (/sbin/apk, /etc/apk, /lib/apk) is NOT copied into the
+# final image, preserving n8n's Docker Hardened Image security posture.
+RUN apk update && apk upgrade --no-cache && \
+    apk add --no-cache bash git
 
-# bash + git (scripts require bash; git for worktree operations)
-RUN apk add --no-cache bash git
+FROM alpine:3.22 AS downloader
 
-# docker CLI (static binary) + jq — auto-detect architecture
+# Pre-download docker CLI and jq in a disposable stage so the final
+# image does not need wget or any other network tool at runtime.
+RUN apk update && apk upgrade --no-cache && \
+    apk add --no-cache wget tar
 ARG TARGETARCH
 RUN DOCKER_ARCH=$(case "$TARGETARCH" in amd64) echo x86_64;; arm64) echo aarch64;; *) echo "$TARGETARCH";; esac) && \
     wget -q "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-27.5.1.tgz" -O /tmp/docker.tgz && \
@@ -15,7 +22,27 @@ RUN DOCKER_ARCH=$(case "$TARGETARCH" in amd64) echo x86_64;; arm64) echo aarch64
     wget -q "https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-${JQ_ARCH}" -O /usr/local/bin/jq && \
     chmod +x /usr/local/bin/jq
 
-# devcontainer CLI
+FROM n8nio/n8n:1.123.28
+
+USER root
+
+# bash + git binaries (no apk, no wget, no package manager files)
+COPY --from=tools /bin/bash /bin/bash
+COPY --from=tools /usr/bin/git /usr/bin/git
+COPY --from=tools /usr/libexec/git-core /usr/libexec/git-core
+COPY --from=tools /usr/share/git-core /usr/share/git-core
+
+# Runtime libraries for bash + git
+COPY --from=tools /usr/lib/libreadline.so* /usr/lib/
+COPY --from=tools /usr/lib/libncursesw.so* /usr/lib/
+COPY --from=tools /usr/lib/libpcre2-8.so* /usr/lib/
+COPY --from=tools /usr/lib/libz.so* /usr/lib/
+
+# docker CLI + jq (pre-downloaded static binaries)
+COPY --from=downloader /usr/local/bin/docker /usr/local/bin/docker
+COPY --from=downloader /usr/local/bin/jq /usr/local/bin/jq
+
+# devcontainer CLI (installs into /usr/local via npm)
 RUN npm install -g @devcontainers/cli && \
     DC_JS=$(find /opt -name 'devcontainer.js' -path '*/@devcontainers/cli/*' 2>/dev/null | head -1) && \
     printf '#!/bin/sh\nexec node "%s" "$@"\n' "$DC_JS" > /usr/local/bin/devcontainer && \
