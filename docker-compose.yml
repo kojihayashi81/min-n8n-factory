@@ -22,7 +22,7 @@ services:
       - WORKFLOW_TIMEOUT_SEC=${WORKFLOW_TIMEOUT_SEC:-780}
       - STUCK_THRESHOLD_SEC=${STUCK_THRESHOLD_SEC:-1200}
       - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
-      - N8N_PUBLIC_URL=${N8N_PUBLIC_URL:-http://localhost:5678}
+      - EXECUTION_LOG_BASE_URL=${EXECUTION_LOG_BASE_URL:-http://localhost:5678}
       - NODE_FUNCTION_ALLOW_EXTERNAL=slack-notify
       # Resolve `require('slack-notify')` without coupling to n8n's
       # internal node_modules layout. /opt/n8n-user-modules is a
