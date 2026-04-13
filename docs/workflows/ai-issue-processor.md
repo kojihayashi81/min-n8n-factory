@@ -56,8 +56,8 @@ Run Claude Code (/opt/scripts/n8n-run-claude.sh)
 | `Slack: 処理開始` | Slack ノード。初回は親メッセージ、再試行時は元スレッドへの返信として投稿する |
 | `Persist thread ts` | Code ノード。`Slack: 処理開始` の返り値 `message_timestamp` を workflow static data に保存する。初回実行時のみ書き込み、再試行時はスキップ |
 | `Run Claude Code` | `/opt/scripts/n8n-run-claude.sh` を呼び出して Claude Code で調査を実行。stdout に PR URL、エラー時は `error`/`stderr` フィールドに内容を出力 |
-| `Post PR Link to Issue` | 成功時、Issue に Draft PR リンクをコメント投稿 |
-| `Set ai-investigated label` | 成功時、ラベルを `ai-investigated` に変更 |
+| `Post PR Link to Issue` | 成功時、Issue に Draft PR リンクをコメント投稿。`onError: continueRegularOutput`（コメント投稿失敗で Slack 成功通知を道連れにしない） |
+| `Set ai-investigated label` | 成功時、ラベルを `ai-investigated` に変更。`onError: continueRegularOutput`（ラベル変更失敗は `ai-stuck-cleanup` が後で回収する。ここで halt すると Slack 成功通知が届かない） |
 | `Build success payload` | Code ノード。`Run Claude Code` の stdout から正規表現で PR URL を抽出し、static data の ts を優先して `buildSuccessMessage` を呼ぶ |
 | `Slack: 調査完了` | Slack ノード。成功時、元スレッドに返信しつつ `reply_broadcast: true` でチャンネルにも再露出 |
 | `Set ai-failed label` | 失敗時、ラベルを `ai-failed` に変更 |

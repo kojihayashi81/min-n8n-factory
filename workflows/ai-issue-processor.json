@@ -182,7 +182,9 @@
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
       "position": [1872, 108],
-      "credentials": {}
+      "onError": "continueRegularOutput",
+      "credentials": {},
+      "notes": "PR リンクコメントは nice-to-have。GitHub API 障害で落ちても Slack: 調査完了 まで必ず到達させる（オペレータの一次アラートは Slack）。R-1 の失敗ブランチ対応の対称ケース"
     },
     {
       "parameters": {
@@ -200,7 +202,9 @@
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
       "position": [2092, 108],
-      "credentials": {}
+      "onError": "continueRegularOutput",
+      "credentials": {},
+      "notes": "ラベル変更の失敗は ai-stuck-cleanup（STUCK_THRESHOLD_SEC 経過後）が後で回収する。ここで止めると Slack 成功通知まで道連れになるため continueRegularOutput。稀に「Slack では成功したが後で stuck 扱い」という矛盾状態が発生しうるが、オペレータは Slack を見て調査できる"
     },
     {
       "parameters": {

@@ -32,7 +32,7 @@ const PR_NUMBER_PATTERN = /\/pull\/(\d+)/;
 const SECRET_PATTERNS = [
   /\bAuthorization:[^\n\r]*/gi,                   // Authorization: ... to end of line
   /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi,          // Bare Bearer tokens
-  /xox[baprs]-[A-Za-z0-9-]{10,}/g,                // Slack tokens
+  /xox[baeprs]-[A-Za-z0-9-]{10,}/g,               // Slack tokens (b/a/e/p/r/s incl. xoxe rotation refresh)
   /ghp_[A-Za-z0-9]{20,}/g,                        // GitHub personal access tokens
   /gho_[A-Za-z0-9]{20,}/g,                        // GitHub OAuth tokens
   /ghu_[A-Za-z0-9]{20,}/g,                        // GitHub user-to-server tokens
@@ -111,41 +111,45 @@ function buildStartMessage({ repo, issueNumber, issueTitle, channelId, threadTs 
 
 function buildSuccessMessage({ repo, issueNumber, issueTitle, channelId, threadTs, prUrl, executionStartedAt }) {
   const issueUrl = `https://github.com/${repo}/issues/${issueNumber}`;
-  const prNum = extractPrNumber(prUrl);
+  const hasPr = Boolean(prUrl) && extractPrNumber(prUrl) !== '—';
+  const prNum = hasPr ? extractPrNumber(prUrl) : null;
   const elapsed = elapsedSinceStart(executionStartedAt);
   const min = Math.floor(elapsed / 60);
   const sec = String(elapsed % 60).padStart(2, '0');
+
+  // Section body adapts: if the PR URL is missing we don't want to
+  // mislead the reader with a "Draft PR を作成しました" line or a
+  // "PR #—" button that dead-ends at the repo /pulls page.
+  const sectionText = hasPr
+    ? '調査が完了し、Draft PR を作成しました。'
+    : '調査が完了しました。PR URL を stdout から検出できなかったため、リポジトリの Pull requests 一覧を確認してください。';
+  const contextText = hasPr
+    ? `${repo} | issues/${issueNumber} → PR #${prNum} | ⏱️ ${min}分${sec}秒`
+    : `${repo} | issues/${issueNumber} | ⏱️ ${min}分${sec}秒`;
+
+  const actionsElements = [
+    {
+      type: 'button',
+      text: { type: 'plain_text', text: `📋 Issue #${issueNumber}` },
+      url: issueUrl
+    }
+  ];
+  if (hasPr) {
+    actionsElements.push({
+      type: 'button',
+      text: { type: 'plain_text', text: `🔀 PR #${prNum}` },
+      url: prUrl
+    });
+  }
+
   const msg = {
     channel: channelId,
     text: `✅ 調査完了: #${issueNumber} ${issueTitle}`,
     blocks: [
       { type: 'header', text: { type: 'plain_text', text: '✅ 調査完了' } },
-      {
-        type: 'section',
-        text: { type: 'mrkdwn', text: '調査が完了し、Draft PR を作成しました。' }
-      },
-      {
-        type: 'context',
-        elements: [{
-          type: 'mrkdwn',
-          text: `${repo} | issues/${issueNumber} → PR #${prNum} | ⏱️ ${min}分${sec}秒`
-        }]
-      },
-      {
-        type: 'actions',
-        elements: [
-          {
-            type: 'button',
-            text: { type: 'plain_text', text: `📋 Issue #${issueNumber}` },
-            url: issueUrl
-          },
-          {
-            type: 'button',
-            text: { type: 'plain_text', text: `🔀 PR #${prNum}` },
-            url: prUrl
-          }
-        ]
-      }
+      { type: 'section', text: { type: 'mrkdwn', text: sectionText } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: contextText }] },
+      { type: 'actions', elements: actionsElements }
     ]
   };
   if (threadTs) msg.thread_ts = threadTs;
@@ -287,7 +291,15 @@ function extractPrUrl(stdout) {
 function resolveFailureError(runClaudeOutput, timeoutSec) {
   const raw = ((runClaudeOutput && (runClaudeOutput.error || runClaudeOutput.stderr)) || '').toString().trim();
   if (raw) return scrubSecrets(raw);
-  return `タイムアウトまたは不明なエラー（Claude Code 上限: ${timeoutSec}秒）`;
+  // Defensive: timeoutSec flows in from $env and is interpolated into
+  // the Slack / GitHub comment. Anything that is not a plain digit
+  // string is silently replaced with the default so a miswired env
+  // (e.g. SLACK_BOT_TOKEN vs CLAUDE_TIMEOUT_SEC) cannot leak into the
+  // notification text via this path.
+  const safeTimeout = /^\d{1,6}$/.test(String(timeoutSec))
+    ? String(timeoutSec)
+    : DEFAULT_CLAUDE_TIMEOUT_SEC;
+  return `タイムアウトまたは不明なエラー（Claude Code 上限: ${safeTimeout}秒）`;
 }
 
 // Dispatch table: kind → Strategy that resolves Slack-node fields from the
@@ -305,14 +317,17 @@ const STRATEGIES = {
     replyBroadcast: false
   }),
   success: ({ issue, env, threadTs, runClaudeOutput, executionStartedAt }) => ({
+    // Pass the raw extractPrUrl result through — null signals "PR not
+    // found" to buildSuccessMessage, which suppresses the PR button and
+    // softens the section text. The old "/pulls" fallback rendered as
+    // "PR #—" in Slack, which looked broken.
     message: buildSuccessMessage({
       repo: env.GITHUB_REPO,
       issueNumber: issue.number,
       issueTitle: issue.title,
       channelId: env.SLACK_CHANNEL_ID,
       threadTs,
-      prUrl: extractPrUrl(runClaudeOutput && runClaudeOutput.stdout)
-        || `https://github.com/${env.GITHUB_REPO}/pulls`,
+      prUrl: extractPrUrl(runClaudeOutput && runClaudeOutput.stdout),
       executionStartedAt
     }),
     // Broadcast back to the main channel so people see the final result
