@@ -98,7 +98,7 @@ npm install
 
 プッシュ直前に以下を実行する:
 
-- `npm run lint` — `markdownlint` によるリポジトリ全体の Markdown リント
+- `npm run lint` — `markdownlint` と `prettier --check`（Git 追跡ファイル全体のフォーマット検証）
 - `npm test` — `scripts/` と `mcp-server/` 両方の全テスト
 
 いずれかが失敗するとプッシュはブロックされる。
