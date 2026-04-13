@@ -23,12 +23,12 @@ n8n (Docker コンテナ)
 
 ### 選択の経緯
 
-| 案 | 問題点 |
-| --- | --- |
-| ホストで直接実行 | ホストに Claude Code・gh CLI をグローバルインストールが必要 |
-| SSH 経由でホスト実行 | macOS リモートログイン設定・鍵管理が煩雑。`:ro` マウントで known_hosts 書き込み不可 |
-| 専用コンテナ（claude-runner） | 開発者の環境と AI の環境が乖離する |
-| **DevContainer + Worktree（採用）** | 開発者と同じ環境で AI が動く・並列実行可能・ホストを汚染しない |
+| 案                                  | 問題点                                                                              |
+| ----------------------------------- | ----------------------------------------------------------------------------------- |
+| ホストで直接実行                    | ホストに Claude Code・gh CLI をグローバルインストールが必要                         |
+| SSH 経由でホスト実行                | macOS リモートログイン設定・鍵管理が煩雑。`:ro` マウントで known_hosts 書き込み不可 |
+| 専用コンテナ（claude-runner）       | 開発者の環境と AI の環境が乖離する                                                  |
+| **DevContainer + Worktree（採用）** | 開発者と同じ環境で AI が動く・並列実行可能・ホストを汚染しない                      |
 
 ### DevContainer のメリット
 
@@ -157,10 +157,10 @@ Schedule 10min
 
 ## 動作確認済みステップ
 
-| # | ステップ | 状態 | 確認内容 |
-| --- | --- | --- | --- |
-| 1 | worktree 作成 | 確認済み | `create-worktree.sh` で冪等に worktree 作成・パス返却 |
-| 2 | DevContainer 起動 | 確認済み | `start-devcontainer.sh` で冪等にコンテナ起動・ID 返却 |
-| 3 | DevContainer 内で claude 実行 | 未着手 | `~/.claude` マウント + `devcontainer exec claude --print` |
-| 4 | n8n ワークフロー統合 | 未着手 | Run Claude Code ノードからスクリプトを呼び出す |
-| 5 | E2E 動作確認 | 未着手 | ai-ready Issue → 調査 → PR 作成 → コメント投稿 |
+| #   | ステップ                      | 状態     | 確認内容                                                  |
+| --- | ----------------------------- | -------- | --------------------------------------------------------- |
+| 1   | worktree 作成                 | 確認済み | `create-worktree.sh` で冪等に worktree 作成・パス返却     |
+| 2   | DevContainer 起動             | 確認済み | `start-devcontainer.sh` で冪等にコンテナ起動・ID 返却     |
+| 3   | DevContainer 内で claude 実行 | 未着手   | `~/.claude` マウント + `devcontainer exec claude --print` |
+| 4   | n8n ワークフロー統合          | 未着手   | Run Claude Code ノードからスクリプトを呼び出す            |
+| 5   | E2E 動作確認                  | 未着手   | ai-ready Issue → 調査 → PR 作成 → コメント投稿            |

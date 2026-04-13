@@ -101,35 +101,35 @@
 
 ### n8n カスタムイメージ (Dockerfile.n8n)
 
-| パッケージ | 目的 | インストール方法 |
-| --- | --- | --- |
-| n8n | ワークフローエンジン | ベースイメージ (`n8nio/n8n:1.123.28`) |
-| docker CLI | Docker socket 経由でホストの Docker を操作 | 静的バイナリをダウンロード（Hardened Image のため `apk` 不可） |
-| jq | DevContainer 起動結果のパース | 静的バイナリをダウンロード |
-| bash | スクリプト実行に必要 | `apk add --no-cache bash` |
-| git | 対象リポジトリに worktree を作成 | `apk add --no-cache git` |
-| Node.js + npm | devcontainer CLI の実行に必要 | ベースイメージにプリインストール済み |
-| @devcontainers/cli | DevContainer の起動・コマンド実行 | `npm install -g @devcontainers/cli` |
+| パッケージ         | 目的                                       | インストール方法                                               |
+| ------------------ | ------------------------------------------ | -------------------------------------------------------------- |
+| n8n                | ワークフローエンジン                       | ベースイメージ (`n8nio/n8n:1.123.28`)                          |
+| docker CLI         | Docker socket 経由でホストの Docker を操作 | 静的バイナリをダウンロード（Hardened Image のため `apk` 不可） |
+| jq                 | DevContainer 起動結果のパース              | 静的バイナリをダウンロード                                     |
+| bash               | スクリプト実行に必要                       | `apk add --no-cache bash`                                      |
+| git                | 対象リポジトリに worktree を作成           | `apk add --no-cache git`                                       |
+| Node.js + npm      | devcontainer CLI の実行に必要              | ベースイメージにプリインストール済み                           |
+| @devcontainers/cli | DevContainer の起動・コマンド実行          | `npm install -g @devcontainers/cli`                            |
 
 ### docker-compose.yml の変更点
 
-| 追加項目 | 目的 |
-| --- | --- |
-| カスタムイメージ（`n8nio/n8n` の代わり） | n8n + docker CLI + git + devcontainer CLI |
-| `/var/run/docker.sock` ボリューム | n8n コンテナからホストの Docker を操作 |
-| `PROJECT_PATH` ボリューム（bind mount） | n8n コンテナから対象リポジトリにアクセスし worktree を作成 |
-| `CLAUDE_CODE_OAUTH_TOKEN` 環境変数 | n8n コンテナの shell を経由して DevContainer に `localEnv` で渡される |
+| 追加項目                                 | 目的                                                                  |
+| ---------------------------------------- | --------------------------------------------------------------------- |
+| カスタムイメージ（`n8nio/n8n` の代わり） | n8n + docker CLI + git + devcontainer CLI                             |
+| `/var/run/docker.sock` ボリューム        | n8n コンテナからホストの Docker を操作                                |
+| `PROJECT_PATH` ボリューム（bind mount）  | n8n コンテナから対象リポジトリにアクセスし worktree を作成            |
+| `CLAUDE_CODE_OAUTH_TOKEN` 環境変数       | n8n コンテナの shell を経由して DevContainer に `localEnv` で渡される |
 
 ### 対象リポジトリ（setup スクリプトで事前配布）
 
-| コンポーネント | 配布コマンド | 目的 |
-| --- | --- | --- |
-| `.devcontainer/Dockerfile` | `make setup-devcontainer` | Claude CLI + gh CLI + Node.js |
-| `.devcontainer/devcontainer.json` | `make setup-devcontainer` | remoteEnv、postCreateCommand |
-| `.claude/skills/investigate/SKILL.md` | `make setup-skills` | 調査スキル |
-| `.claude/scripts/save-investigation.sh` | `make setup-skills` | 調査ノート保存 |
-| `.github/ISSUE_TEMPLATE/ai-task.yml` | `make setup-issue-template` | AI タスク用 Issue フォーム |
-| ラベル (ai-ready, ai-processing 等) | `make setup-labels` | ワークフロー状態管理 |
+| コンポーネント                          | 配布コマンド                | 目的                          |
+| --------------------------------------- | --------------------------- | ----------------------------- |
+| `.devcontainer/Dockerfile`              | `make setup-devcontainer`   | Claude CLI + gh CLI + Node.js |
+| `.devcontainer/devcontainer.json`       | `make setup-devcontainer`   | remoteEnv、postCreateCommand  |
+| `.claude/skills/investigate/SKILL.md`   | `make setup-skills`         | 調査スキル                    |
+| `.claude/scripts/save-investigation.sh` | `make setup-skills`         | 調査ノート保存                |
+| `.github/ISSUE_TEMPLATE/ai-task.yml`    | `make setup-issue-template` | AI タスク用 Issue フォーム    |
+| ラベル (ai-ready, ai-processing 等)     | `make setup-labels`         | ワークフロー状態管理          |
 
 ## 実行フロー（ステップごと）
 
@@ -157,10 +157,10 @@
 
 ## トークン・認証の一覧
 
-| トークン | 保存場所 | 使用者 | 目的 |
-| --- | --- | --- | --- |
-| `CLAUDE_CODE_OAUTH_TOKEN` | `.env` → n8n コンテナ → DevContainer | Claude CLI | AI 推論（Max プラン） |
-| `GH_TOKEN` | ホスト環境変数 → DevContainer | gh CLI | PR 作成、コミットのプッシュ |
-| GitHub PAT | n8n Credentials（暗号化保存） | n8n GitHub ノード | Issue 取得、ラベル変更、コメント投稿 |
-| `N8N_API_KEY` | `.env` → n8n コンテナ | n8n REST API | ワークフローインポート (`make import-workflow`) |
-| `N8N_ENCRYPTION_KEY` | `.env` → n8n コンテナ | n8n | Credentials の暗号化 |
+| トークン                  | 保存場所                             | 使用者            | 目的                                            |
+| ------------------------- | ------------------------------------ | ----------------- | ----------------------------------------------- |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `.env` → n8n コンテナ → DevContainer | Claude CLI        | AI 推論（Max プラン）                           |
+| `GH_TOKEN`                | ホスト環境変数 → DevContainer        | gh CLI            | PR 作成、コミットのプッシュ                     |
+| GitHub PAT                | n8n Credentials（暗号化保存）        | n8n GitHub ノード | Issue 取得、ラベル変更、コメント投稿            |
+| `N8N_API_KEY`             | `.env` → n8n コンテナ                | n8n REST API      | ワークフローインポート (`make import-workflow`) |
+| `N8N_ENCRYPTION_KEY`      | `.env` → n8n コンテナ                | n8n               | Credentials の暗号化                            |

@@ -1,14 +1,20 @@
 services:
   mcp-docs:
     build: ./mcp-server
-    restart: "no"
+    restart: 'no'
     ports:
-      - "127.0.0.1:3100:3100"
+      - '127.0.0.1:3100:3100'
     environment:
       - MCP_PORT=3100
       - MCP_ROOT=/workspace
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3100/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3100/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3

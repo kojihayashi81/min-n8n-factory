@@ -30,16 +30,16 @@ const PR_NUMBER_PATTERN = /\/pull\/(\d+)/;
 // Bearer rule alone would only replace the "Bearer" keyword and leave the
 // token value behind when the separator between them is a single space.
 const SECRET_PATTERNS = [
-  /\bAuthorization:[^\n\r]*/gi,                   // Authorization: ... to end of line
-  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi,          // Bare Bearer tokens
-  /xox[baeprs]-[A-Za-z0-9-]{10,}/g,               // Slack tokens (b/a/e/p/r/s incl. xoxe rotation refresh)
-  /ghp_[A-Za-z0-9]{20,}/g,                        // GitHub personal access tokens
-  /gho_[A-Za-z0-9]{20,}/g,                        // GitHub OAuth tokens
-  /ghu_[A-Za-z0-9]{20,}/g,                        // GitHub user-to-server tokens
-  /ghs_[A-Za-z0-9]{20,}/g,                        // GitHub server-to-server tokens
-  /ghr_[A-Za-z0-9]{20,}/g,                        // GitHub refresh tokens
-  /github_pat_[A-Za-z0-9_]{20,}/g,                // GitHub fine-grained PATs
-  /sk-ant-[A-Za-z0-9_-]{20,}/g                    // Anthropic API keys
+  /\bAuthorization:[^\n\r]*/gi, // Authorization: ... to end of line
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi, // Bare Bearer tokens
+  /xox[baeprs]-[A-Za-z0-9-]{10,}/g, // Slack tokens (b/a/e/p/r/s incl. xoxe rotation refresh)
+  /ghp_[A-Za-z0-9]{20,}/g, // GitHub personal access tokens
+  /gho_[A-Za-z0-9]{20,}/g, // GitHub OAuth tokens
+  /ghu_[A-Za-z0-9]{20,}/g, // GitHub user-to-server tokens
+  /ghs_[A-Za-z0-9]{20,}/g, // GitHub server-to-server tokens
+  /ghr_[A-Za-z0-9]{20,}/g, // GitHub refresh tokens
+  /github_pat_[A-Za-z0-9_]{20,}/g, // GitHub fine-grained PATs
+  /sk-ant-[A-Za-z0-9_-]{20,}/g, // Anthropic API keys
 ];
 
 function scrubSecrets(text) {
@@ -83,15 +83,17 @@ function buildStartMessage({ repo, issueNumber, issueTitle, channelId, threadTs 
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `#${issueNumber} ${issueTitle}`
-        }
+          text: `#${issueNumber} ${issueTitle}`,
+        },
       },
       {
         type: 'context',
-        elements: [{
-          type: 'mrkdwn',
-          text: `${repo} | issues/${issueNumber} | ${now}`
-        }]
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `${repo} | issues/${issueNumber} | ${now}`,
+          },
+        ],
       },
       {
         type: 'actions',
@@ -99,17 +101,25 @@ function buildStartMessage({ repo, issueNumber, issueTitle, channelId, threadTs 
           {
             type: 'button',
             text: { type: 'plain_text', text: `📋 Issue #${issueNumber}` },
-            url: issueUrl
-          }
-        ]
-      }
-    ]
+            url: issueUrl,
+          },
+        ],
+      },
+    ],
   };
   if (threadTs) msg.thread_ts = threadTs;
   return msg;
 }
 
-function buildSuccessMessage({ repo, issueNumber, issueTitle, channelId, threadTs, prUrl, executionStartedAt }) {
+function buildSuccessMessage({
+  repo,
+  issueNumber,
+  issueTitle,
+  channelId,
+  threadTs,
+  prUrl,
+  executionStartedAt,
+}) {
   const issueUrl = `https://github.com/${repo}/issues/${issueNumber}`;
   const hasPr = Boolean(prUrl) && extractPrNumber(prUrl) !== '—';
   const prNum = hasPr ? extractPrNumber(prUrl) : null;
@@ -131,14 +141,14 @@ function buildSuccessMessage({ repo, issueNumber, issueTitle, channelId, threadT
     {
       type: 'button',
       text: { type: 'plain_text', text: `📋 Issue #${issueNumber}` },
-      url: issueUrl
-    }
+      url: issueUrl,
+    },
   ];
   if (hasPr) {
     actionsElements.push({
       type: 'button',
       text: { type: 'plain_text', text: `🔀 PR #${prNum}` },
-      url: prUrl
+      url: prUrl,
     });
   }
 
@@ -149,14 +159,23 @@ function buildSuccessMessage({ repo, issueNumber, issueTitle, channelId, threadT
       { type: 'header', text: { type: 'plain_text', text: '✅ 調査完了' } },
       { type: 'section', text: { type: 'mrkdwn', text: sectionText } },
       { type: 'context', elements: [{ type: 'mrkdwn', text: contextText }] },
-      { type: 'actions', elements: actionsElements }
-    ]
+      { type: 'actions', elements: actionsElements },
+    ],
   };
   if (threadTs) msg.thread_ts = threadTs;
   return msg;
 }
 
-function buildFailureMessage({ repo, issueNumber, issueTitle, channelId, threadTs, error, executionUrl, executionStartedAt }) {
+function buildFailureMessage({
+  repo,
+  issueNumber,
+  issueTitle,
+  channelId,
+  threadTs,
+  error,
+  executionUrl,
+  executionStartedAt,
+}) {
   const issueUrl = `https://github.com/${repo}/issues/${issueNumber}`;
   const errorText = (error || 'タイムアウト').substring(0, FAILURE_ERROR_MAX);
   const elapsed = elapsedSinceStart(executionStartedAt);
@@ -171,15 +190,17 @@ function buildFailureMessage({ repo, issueNumber, issueTitle, channelId, threadT
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `• ${errorText}\n• 👉 Issue に \`ai-ready\` ラベルを再付与してリトライしてください`
-        }
+          text: `• ${errorText}\n• 👉 Issue に \`ai-ready\` ラベルを再付与してリトライしてください`,
+        },
       },
       {
         type: 'context',
-        elements: [{
-          type: 'mrkdwn',
-          text: `${repo} | issues/${issueNumber} | ⏱️ ${min}分${sec}秒`
-        }]
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `${repo} | issues/${issueNumber} | ⏱️ ${min}分${sec}秒`,
+          },
+        ],
       },
       {
         type: 'actions',
@@ -187,16 +208,16 @@ function buildFailureMessage({ repo, issueNumber, issueTitle, channelId, threadT
           {
             type: 'button',
             text: { type: 'plain_text', text: `📋 Issue #${issueNumber}` },
-            url: issueUrl
+            url: issueUrl,
           },
           {
             type: 'button',
             text: { type: 'plain_text', text: '🔗 n8n実行ログ' },
-            url: executionUrl
-          }
-        ]
-      }
-    ]
+            url: executionUrl,
+          },
+        ],
+      },
+    ],
   };
   if (threadTs) msg.thread_ts = threadTs;
   return msg;
@@ -206,13 +227,16 @@ function buildStuckBatchMessage({ repo, channelId, issues, timeoutSec }) {
   const total = issues.length;
   const shown = issues.slice(0, STUCK_BATCH_ISSUE_DISPLAY_LIMIT);
   const overflow = total - shown.length;
-  const list = shown.map((i) => {
-    const title = (i.title || '').length > STUCK_BATCH_TITLE_MAX
-      ? `${i.title.slice(0, STUCK_BATCH_TITLE_MAX - 1)}…`
-      : i.title;
-    const updated = new Date(i.updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-    return `• <https://github.com/${repo}/issues/${i.number}|#${i.number}> ${title}\n  最終更新: ${updated}`;
-  }).join('\n');
+  const list = shown
+    .map((i) => {
+      const title =
+        (i.title || '').length > STUCK_BATCH_TITLE_MAX
+          ? `${i.title.slice(0, STUCK_BATCH_TITLE_MAX - 1)}…`
+          : i.title;
+      const updated = new Date(i.updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+      return `• <https://github.com/${repo}/issues/${i.number}|#${i.number}> ${title}\n  最終更新: ${updated}`;
+    })
+    .join('\n');
   const overflowLine = overflow > 0 ? `\n... 他 ${overflow} 件` : '';
   return {
     channel: channelId,
@@ -223,17 +247,19 @@ function buildStuckBatchMessage({ repo, channelId, issues, timeoutSec }) {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `\`ai-processing\` のまま ${timeoutSec}秒以上経過した Issue を検知しました。\n全て \`ai-failed\` に変更済みです。\n\n${list}${overflowLine}`
-        }
+          text: `\`ai-processing\` のまま ${timeoutSec}秒以上経過した Issue を検知しました。\n全て \`ai-failed\` に変更済みです。\n\n${list}${overflowLine}`,
+        },
       },
       {
         type: 'context',
-        elements: [{
-          type: 'mrkdwn',
-          text: `${repo} | リトライ: \`ai-ready\` ラベルを再付与してください`
-        }]
-      }
-    ]
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `${repo} | リトライ: \`ai-ready\` ラベルを再付与してください`,
+          },
+        ],
+      },
+    ],
   };
 }
 
@@ -249,15 +275,17 @@ function buildStuckMessage({ repo, issueNumber, issueTitle, channelId, updatedAt
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `• \`ai-processing\` のまま ${timeoutSec}秒以上経過\n• \`ai-failed\` に変更済み\n• リトライ: \`ai-ready\` ラベルを再付与してください`
-        }
+          text: `• \`ai-processing\` のまま ${timeoutSec}秒以上経過\n• \`ai-failed\` に変更済み\n• リトライ: \`ai-ready\` ラベルを再付与してください`,
+        },
       },
       {
         type: 'context',
-        elements: [{
-          type: 'mrkdwn',
-          text: `${repo} | issues/${issueNumber} | 最終更新: ${updatedAtStr}`
-        }]
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `${repo} | issues/${issueNumber} | 最終更新: ${updatedAtStr}`,
+          },
+        ],
       },
       {
         type: 'actions',
@@ -265,11 +293,11 @@ function buildStuckMessage({ repo, issueNumber, issueTitle, channelId, updatedAt
           {
             type: 'button',
             text: { type: 'plain_text', text: `📋 Issue #${issueNumber}` },
-            url: issueUrl
-          }
-        ]
-      }
-    ]
+            url: issueUrl,
+          },
+        ],
+      },
+    ],
   };
 }
 
@@ -289,7 +317,9 @@ function extractPrUrl(stdout) {
 }
 
 function resolveFailureError(runClaudeOutput, timeoutSec) {
-  const raw = ((runClaudeOutput && (runClaudeOutput.error || runClaudeOutput.stderr)) || '').toString().trim();
+  const raw = ((runClaudeOutput && (runClaudeOutput.error || runClaudeOutput.stderr)) || '')
+    .toString()
+    .trim();
   if (raw) return scrubSecrets(raw);
   // Defensive: timeoutSec flows in from $env and is interpolated into
   // the Slack / GitHub comment. Anything that is not a plain digit
@@ -312,9 +342,9 @@ const STRATEGIES = {
       issueNumber: issue.number,
       issueTitle: issue.title,
       channelId: env.SLACK_CHANNEL_ID,
-      threadTs
+      threadTs,
     }),
-    replyBroadcast: false
+    replyBroadcast: false,
   }),
   success: ({ issue, env, threadTs, runClaudeOutput, executionStartedAt }) => ({
     // Pass the raw extractPrUrl result through — null signals "PR not
@@ -328,11 +358,11 @@ const STRATEGIES = {
       channelId: env.SLACK_CHANNEL_ID,
       threadTs,
       prUrl: extractPrUrl(runClaudeOutput && runClaudeOutput.stdout),
-      executionStartedAt
+      executionStartedAt,
     }),
     // Broadcast back to the main channel so people see the final result
     // even if they weren't watching the Issue's thread.
-    replyBroadcast: true
+    replyBroadcast: true,
   }),
   failure: ({ issue, env, threadTs, runClaudeOutput, executionUrl, executionStartedAt }) => {
     const errorText = resolveFailureError(
@@ -348,13 +378,13 @@ const STRATEGIES = {
         threadTs,
         error: errorText,
         executionUrl,
-        executionStartedAt
+        executionStartedAt,
       }),
       replyBroadcast: true,
       // Surface the scrubbed error text so the GitHub comment node can
       // reuse the same resolved string instead of duplicating the
       // error/stderr/timeout fallback logic in a workflow expression.
-      errorText
+      errorText,
     };
   },
   'stuck-batch': ({ env, issues }) => ({
@@ -362,10 +392,10 @@ const STRATEGIES = {
       repo: env.GITHUB_REPO,
       channelId: env.SLACK_CHANNEL_ID,
       issues: issues || [],
-      timeoutSec: env.STUCK_THRESHOLD_SEC || DEFAULT_STUCK_THRESHOLD_SEC
+      timeoutSec: env.STUCK_THRESHOLD_SEC || DEFAULT_STUCK_THRESHOLD_SEC,
     }),
-    replyBroadcast: false
-  })
+    replyBroadcast: false,
+  }),
 };
 
 const MAX_THREAD_ENTRIES = 200;
@@ -409,7 +439,7 @@ function buildPayloadForContext(context) {
     runClaudeOutput: context.runClaudeOutput,
     executionUrl: context.executionUrl,
     executionStartedAt: context.executionStartedAt,
-    issues: context.issues
+    issues: context.issues,
   });
 
   const payload = {
@@ -418,7 +448,7 @@ function buildPayloadForContext(context) {
     blocks: message.blocks,
     blocksJson: JSON.stringify({ blocks: message.blocks }),
     thread_ts: message.thread_ts || '',
-    reply_broadcast: Boolean(replyBroadcast)
+    reply_broadcast: Boolean(replyBroadcast),
   };
   if (errorText !== undefined) payload.errorText = errorText;
   return payload;
@@ -440,5 +470,5 @@ module.exports = {
   MAX_THREAD_ENTRIES,
   SLACK_SECTION_TEXT_LIMIT,
   FAILURE_ERROR_MAX,
-  STUCK_BATCH_ISSUE_DISPLAY_LIMIT
+  STUCK_BATCH_ISSUE_DISPLAY_LIMIT,
 };

@@ -1,4 +1,4 @@
-import type { ResourceEntry, DriftItem, PipelineResult } from "./types.js";
+import type { ResourceEntry, DriftItem, PipelineResult } from './types.js';
 
 export interface SearchResult {
   uri: string;
@@ -14,7 +14,7 @@ export interface SearchResult {
 export function searchResources(
   result: PipelineResult,
   query: string,
-  scope: "all" | "spec" | "derived" = "all"
+  scope: 'all' | 'spec' | 'derived' = 'all'
 ): SearchResult[] {
   const terms = query
     .toLowerCase()
@@ -22,32 +22,25 @@ export function searchResources(
     .filter(Boolean);
 
   const candidates =
-    scope === "all"
-      ? result.resources
-      : result.resources.filter((r) => r.kind === scope);
+    scope === 'all' ? result.resources : result.resources.filter((r) => r.kind === scope);
 
   const scored: SearchResult[] = [];
 
   for (const res of candidates) {
     let relevance = 0;
-    const searchable = [
-      res.title,
-      res.summary,
-      res.content,
-      ...res.knownGaps,
-    ]
-      .join(" ")
+    const searchable = [res.title, res.summary, res.content, ...res.knownGaps]
+      .join(' ')
       .toLowerCase();
 
     for (const term of terms) {
-      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const matches = searchable.match(new RegExp(escaped, "g"));
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const matches = searchable.match(new RegExp(escaped, 'g'));
       if (matches) relevance += matches.length;
     }
 
     if (relevance > 0) {
       // Boost spec resources
-      if (res.kind === "spec") relevance *= 1.5;
+      if (res.kind === 'spec') relevance *= 1.5;
       scored.push({
         uri: res.uri,
         title: res.title,
@@ -78,8 +71,7 @@ export function explainTopic(
     .split(/[\s　]+/)
     .filter(Boolean);
 
-  const matchesAny = (text: string) =>
-    terms.some((t) => text.toLowerCase().includes(t));
+  const matchesAny = (text: string) => terms.some((t) => text.toLowerCase().includes(t));
   const matchesResource = (res: ResourceEntry) =>
     matchesAny(res.title) || matchesAny(res.summary) || matchesAny(res.content);
 
@@ -97,10 +89,10 @@ export function explainTopic(
     const section = {
       title: res.title,
       content: res.content,
-      source: res.sourceFiles.join(", "),
+      source: res.sourceFiles.join(', '),
     };
 
-    if (res.kind === "spec") {
+    if (res.kind === 'spec') {
       specSections.push(section);
     } else if (includeImplementation) {
       derivedSections.push(section);
@@ -117,40 +109,33 @@ export function explainTopic(
 }
 
 /** Format drift items for tool output */
-export function formatDriftReport(
-  items: DriftItem[],
-  area?: string
-): string {
+export function formatDriftReport(items: DriftItem[], area?: string): string {
   const filtered = area
     ? items.filter((i) => i.area.toLowerCase().includes(area.toLowerCase()))
     : items;
 
   if (filtered.length === 0) {
-    return "差分は検出されませんでした。";
+    return '差分は検出されませんでした。';
   }
 
   const lines = filtered.map((item) => {
     const icon =
-      item.severity === "error"
-        ? "[ERROR]"
-        : item.severity === "warning"
-          ? "[WARNING]"
-          : "[INFO]";
+      item.severity === 'error' ? '[ERROR]' : item.severity === 'warning' ? '[WARNING]' : '[INFO]';
     return [
       `${icon} ${item.area}`,
       `  仕様: ${item.docSays}`,
       `  実装: ${item.implSays}`,
-      `  ソース: ${item.sourceFiles.join(", ")}`,
-    ].join("\n");
+      `  ソース: ${item.sourceFiles.join(', ')}`,
+    ].join('\n');
   });
 
-  const errorCount = filtered.filter((i) => i.severity === "error").length;
-  const warningCount = filtered.filter((i) => i.severity === "warning").length;
-  const infoCount = filtered.filter((i) => i.severity === "info").length;
+  const errorCount = filtered.filter((i) => i.severity === 'error').length;
+  const warningCount = filtered.filter((i) => i.severity === 'warning').length;
+  const infoCount = filtered.filter((i) => i.severity === 'info').length;
 
   return [
     `差分候補: ${filtered.length} 件（ERROR ${errorCount} / WARNING ${warningCount} / INFO ${infoCount}）`,
-    "",
+    '',
     ...lines,
-  ].join("\n");
+  ].join('\n');
 }

@@ -1,24 +1,24 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import type { MakeTarget } from "../../lib/types.js";
-import { isAllowedPath } from "../../lib/allowlist.js";
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import type { MakeTarget } from '../../lib/types.js';
+import { isAllowedPath } from '../../lib/allowlist.js';
 
 /**
  * Parse Makefile to extract targets with their comments and recipes.
  * Expects comment lines immediately above target definitions.
  */
 export async function loadMakefile(root: string): Promise<MakeTarget[]> {
-  if (!isAllowedPath("Makefile", root)) return [];
-  const full = path.join(root, "Makefile");
+  if (!isAllowedPath('Makefile', root)) return [];
+  const full = path.join(root, 'Makefile');
   let content: string;
   try {
-    content = await fs.readFile(full, "utf-8");
+    content = await fs.readFile(full, 'utf-8');
   } catch (err) {
-    console.warn("[pipeline] Could not read Makefile:", (err as Error).message);
+    console.warn('[pipeline] Could not read Makefile:', (err as Error).message);
     return [];
   }
 
-  const lines = content.split("\n");
+  const lines = content.split('\n');
   const targets: MakeTarget[] = [];
   const pendingComments: string[] = [];
 
@@ -40,8 +40,8 @@ export async function loadMakefile(root: string): Promise<MakeTarget[]> {
       // Collect recipe lines (indented with tab)
       const recipeLines: string[] = [];
       for (let j = i + 1; j < lines.length; j++) {
-        if (lines[j].startsWith("\t")) {
-          recipeLines.push(lines[j].replace(/^\t/, "").replace(/^@/, ""));
+        if (lines[j].startsWith('\t')) {
+          recipeLines.push(lines[j].replace(/^\t/, '').replace(/^@/, ''));
         } else {
           break;
         }
@@ -49,8 +49,8 @@ export async function loadMakefile(root: string): Promise<MakeTarget[]> {
 
       targets.push({
         name,
-        comment: pendingComments.join(" "),
-        recipe: recipeLines.join("\n"),
+        comment: pendingComments.join(' '),
+        recipe: recipeLines.join('\n'),
       });
       pendingComments.length = 0;
     } else if (!line.trim()) {

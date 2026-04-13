@@ -2,15 +2,15 @@
 
 ## 解決すべき課題
 
-| # | 課題 | 検討事項 |
-| --- | --- | --- |
-| 1 | Claude 認証 | コンテナ内でどう認証するか |
-| 2 | コマンド実行 | `devcontainer exec` の引数とオプション |
-| 3 | 自律実行 | `--dangerously-skip-permissions` を使うか（承認プロンプトを抑制） |
-| 4 | GitHub 操作 | PR 作成のために `GH_TOKEN` が必要 |
-| 5 | Git 設定 | コミットに `user.name` / `user.email` が必要 |
-| 6 | investigate スキルとの整合 | スキルがブランチ作成するが worktree で既に作成済み |
-| 7 | 出力の受け渡し | PR URL を stdout で n8n に返す |
+| #   | 課題                       | 検討事項                                                          |
+| --- | -------------------------- | ----------------------------------------------------------------- |
+| 1   | Claude 認証                | コンテナ内でどう認証するか                                        |
+| 2   | コマンド実行               | `devcontainer exec` の引数とオプション                            |
+| 3   | 自律実行                   | `--dangerously-skip-permissions` を使うか（承認プロンプトを抑制） |
+| 4   | GitHub 操作                | PR 作成のために `GH_TOKEN` が必要                                 |
+| 5   | Git 設定                   | コミットに `user.name` / `user.email` が必要                      |
+| 6   | investigate スキルとの整合 | スキルがブランチ作成するが worktree で既に作成済み                |
+| 7   | 出力の受け渡し             | PR URL を stdout で n8n に返す                                    |
 
 ---
 
@@ -18,11 +18,11 @@
 
 ### 検討した選択肢
 
-| 案 | 方法 | メリット | デメリット |
-| --- | --- | --- | --- |
-| ~~A~~ | ~~`~/.claude` ディレクトリを `:ro` マウント~~ | ~~設定が1箇所~~ | ~~Max プランの OAuth トークンは macOS キーチェーンに保存されておりコンテナからアクセス不可~~ |
-| ~~B~~ | ~~`~/.claude.json` を `:rw` マウント~~ | ~~トークンリフレッシュが可能~~ | ~~`accessToken` / `refreshToken` がファイルに含まれていない（キーチェーン管理）~~ |
-| **C** | **`CLAUDE_CODE_OAUTH_TOKEN` 環境変数** | **マウント不要。環境変数1つで認証が完結** | **トークン生成に `claude setup-token` が必要** |
+| 案    | 方法                                          | メリット                                  | デメリット                                                                                   |
+| ----- | --------------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| ~~A~~ | ~~`~/.claude` ディレクトリを `:ro` マウント~~ | ~~設定が1箇所~~                           | ~~Max プランの OAuth トークンは macOS キーチェーンに保存されておりコンテナからアクセス不可~~ |
+| ~~B~~ | ~~`~/.claude.json` を `:rw` マウント~~        | ~~トークンリフレッシュが可能~~            | ~~`accessToken` / `refreshToken` がファイルに含まれていない（キーチェーン管理）~~            |
+| **C** | **`CLAUDE_CODE_OAUTH_TOKEN` 環境変数**        | **マウント不要。環境変数1つで認証が完結** | **トークン生成に `claude setup-token` が必要**                                               |
 
 ### 決定: 案C — OAuth トークン方式
 
@@ -53,9 +53,9 @@ CLAUDE_CODE_OAUTH_TOKEN=<生成されたトークン>
 
 #### 参考: Claude Code 認証環境変数一覧
 
-| 環境変数 | 用途 | ソース |
-| --- | --- | --- |
-| `ANTHROPIC_API_KEY` | API キー認証（API 課金） | [env-vars](https://code.claude.com/docs/en/env-vars) |
+| 環境変数                  | 用途                                                                 | ソース                                                                                       |
+| ------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`       | API キー認証（API 課金）                                             | [env-vars](https://code.claude.com/docs/en/env-vars)                                         |
 | `CLAUDE_CODE_OAUTH_TOKEN` | `claude setup-token` で生成した長期 OAuth トークン（Max プラン向け） | [authentication](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token) |
 
 ソース: [Claude Code 環境変数ドキュメント](https://code.claude.com/docs/en/env-vars)
@@ -90,9 +90,9 @@ devcontainer exec \
   -- claude --print --dangerously-skip-permissions "/investigate <issue-number>"
 ```
 
-| オプション | 目的 |
-| --- | --- |
-| `--print` | 非対話モード。結果を stdout に出力 |
+| オプション                       | 目的                                                                    |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `--print`                        | 非対話モード。結果を stdout に出力                                      |
 | `--dangerously-skip-permissions` | ツール実行の承認プロンプトを抑制。DevContainer で隔離されているため安全 |
 
 ### `--allowedTools` への移行検討
@@ -135,12 +135,12 @@ echo "$CLAUDE_OUTPUT"
 
 #### exit code の意味
 
-| exit code | 意味 | 典型的な原因 |
-| --- | --- | --- |
-| 0 | 成功 | stdout に Draft PR URL を含む |
-| 1 | claude 側のエラー | 認証失敗、ツール実行エラー、レートリミット等（stderr に詳細） |
-| 124 | `timeout(1)` による強制終了 | `CLAUDE_TIMEOUT_SEC` 超過。stderr には超過時点までの出力が残る |
-| それ以外 | devcontainer / シェル側のエラー | worktree 未作成、trap で捕捉できなかった異常など |
+| exit code | 意味                            | 典型的な原因                                                   |
+| --------- | ------------------------------- | -------------------------------------------------------------- |
+| 0         | 成功                            | stdout に Draft PR URL を含む                                  |
+| 1         | claude 側のエラー               | 認証失敗、ツール実行エラー、レートリミット等（stderr に詳細）  |
+| 124       | `timeout(1)` による強制終了     | `CLAUDE_TIMEOUT_SEC` 超過。stderr には超過時点までの出力が残る |
+| それ以外  | devcontainer / シェル側のエラー | worktree 未作成、trap で捕捉できなかった異常など               |
 
 秘匿情報（Slack トークン / GitHub PAT / Anthropic API キー / `Authorization: Bearer …` ヘッダー）は `scripts/slack-notify-pkg/index.js` の `scrubSecrets` が Slack / Issue コメント投稿直前に `[REDACTED]` で置換するため、上記の生 stderr を通してもオペレータへの漏洩経路は塞がれている。
 
@@ -177,20 +177,20 @@ TypeScript 化はテストコードが必要になったタイミングで検討
 
 ## 5. 環境変数の受け渡し
 
-| 変数 | 用途 | 渡し方 |
-| --- | --- | --- |
-| `GH_TOKEN` | PR 作成・Issue 操作 | `devcontainer.json` の `remoteEnv` |
-| `CLAUDE_CODE_OAUTH_TOKEN` | Claude 認証 | `devcontainer.json` の `remoteEnv`（ホスト環境変数から） |
-| `git user.name/email` | コミット | `devcontainer.json` の `postCreateCommand` で設定 |
+| 変数                      | 用途                | 渡し方                                                   |
+| ------------------------- | ------------------- | -------------------------------------------------------- |
+| `GH_TOKEN`                | PR 作成・Issue 操作 | `devcontainer.json` の `remoteEnv`                       |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Claude 認証         | `devcontainer.json` の `remoteEnv`（ホスト環境変数から） |
+| `git user.name/email`     | コミット            | `devcontainer.json` の `postCreateCommand` で設定        |
 
 ---
 
 ## 6. 決定事項まとめ
 
-| # | 項目 | 決定内容 | 補足 |
-| --- | --- | --- | --- |
-| 1 | Claude 認証 | `CLAUDE_CODE_OAUTH_TOKEN` 環境変数 | `claude setup-token` で生成。マウント不要 |
-| 2 | worktree のブランチ名 | `issues/{number}` で統一 | investigate スキル側も合わせて修正済み |
-| 3 | スクリプト構成 | 統合スクリプト `run-investigation.sh`（シェルスクリプト） | TypeScript 化はテストが必要になったタイミングで検討 |
-| 4 | `--dangerously-skip-permissions` の使用 | 使用する | DevContainer で隔離されているため安全 |
-| 5 | `git user.name/email` の設定方法 | `postCreateCommand` で設定 | DevContainer 初回作成時に1回だけ実行される |
+| #   | 項目                                    | 決定内容                                                  | 補足                                                |
+| --- | --------------------------------------- | --------------------------------------------------------- | --------------------------------------------------- |
+| 1   | Claude 認証                             | `CLAUDE_CODE_OAUTH_TOKEN` 環境変数                        | `claude setup-token` で生成。マウント不要           |
+| 2   | worktree のブランチ名                   | `issues/{number}` で統一                                  | investigate スキル側も合わせて修正済み              |
+| 3   | スクリプト構成                          | 統合スクリプト `run-investigation.sh`（シェルスクリプト） | TypeScript 化はテストが必要になったタイミングで検討 |
+| 4   | `--dangerously-skip-permissions` の使用 | 使用する                                                  | DevContainer で隔離されているため安全               |
+| 5   | `git user.name/email` の設定方法        | `postCreateCommand` で設定                                | DevContainer 初回作成時に1回だけ実行される          |

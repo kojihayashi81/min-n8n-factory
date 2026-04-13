@@ -1,5 +1,5 @@
 /** Information layer: spec (human-maintained) > derived (generated) > raw */
-export type InfoKind = "spec" | "derived" | "raw";
+export type InfoKind = 'spec' | 'derived' | 'raw';
 
 /** Label definition from labels.json (SSOT) */
 export interface LabelDef {
@@ -58,7 +58,7 @@ export interface DriftItem {
   area: string;
   docSays: string;
   implSays: string;
-  severity: "info" | "warning" | "error";
+  severity: 'info' | 'warning' | 'error';
   sourceFiles: string[];
 }
 
