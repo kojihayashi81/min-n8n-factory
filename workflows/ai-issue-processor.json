@@ -272,6 +272,6 @@
   },
   "settings": {
     "executionOrder": "v1",
-    "timeout": 660
+    "executionTimeout": 660
   }
 }
