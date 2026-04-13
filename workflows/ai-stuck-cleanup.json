@@ -50,7 +50,7 @@
             {
               "id": "condition-stale",
               "leftValue": "={{ Math.floor((Date.now() - new Date($json.updated_at).getTime()) / 1000) }}",
-              "rightValue": "={{ $env.CLAUDE_TIMEOUT_SEC || 600 }}",
+              "rightValue": "={{ Number($env.WORKFLOW_TIMEOUT_SEC || 660) }}",
               "operator": {
                 "type": "number",
                 "operation": "gt"
@@ -103,15 +103,35 @@
     },
     {
       "parameters": {
-        "command": "={{ 'node /opt/scripts/slack-notify.js ' + encodeURIComponent(JSON.stringify({type: 'stuck', issueNumber: $('Stale? (updated_at > TIMEOUT)').item.json.number, issueTitle: $('Stale? (updated_at > TIMEOUT)').item.json.title, updatedAt: $('Stale? (updated_at > TIMEOUT)').item.json.updated_at, timeoutSec: $env.CLAUDE_TIMEOUT_SEC || '600'})) }}"
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {"fieldToAggregate": "number", "renameField": false},
+            {"fieldToAggregate": "title", "renameField": false},
+            {"fieldToAggregate": "updated_at", "renameField": false}
+          ]
+        },
+        "options": {
+          "mergeLists": false
+        }
       },
-      "id": "node-slack-stuck",
-      "name": "Slack: スタック検知",
-      "type": "n8n-nodes-base.executeCommand",
+      "id": "node-aggregate",
+      "name": "Aggregate Stuck Issues",
+      "type": "n8n-nodes-base.aggregate",
       "typeVersion": 1,
       "position": [1100, 200],
+      "notes": "スタック検知済み Issue を1件にまとめてバッチ通知用に集約"
+    },
+    {
+      "parameters": {
+        "command": "={{ 'node /opt/scripts/slack-notify.js ' + encodeURIComponent(JSON.stringify({type: 'stuck-batch', issues: $json.number.map((n, i) => ({number: n, title: $json.title[i], updatedAt: $json.updated_at[i]})), timeoutSec: $env.WORKFLOW_TIMEOUT_SEC || '660'})) }}"
+      },
+      "id": "node-slack-stuck",
+      "name": "Slack: スタック検知 (一括)",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [1300, 200],
       "onError": "continueRegularOutput",
-      "notes": "スタック検知時にチャンネルに直接投稿（スレッドなし）"
+      "notes": "スタック検知済み Issue をまとめて1件のメッセージで通知"
     }
   ],
   "connections": {
@@ -138,7 +158,12 @@
     },
     "Post Stuck Comment": {
       "main": [
-        [{"node": "Slack: スタック検知", "type": "main", "index": 0}]
+        [{"node": "Aggregate Stuck Issues", "type": "main", "index": 0}]
+      ]
+    },
+    "Aggregate Stuck Issues": {
+      "main": [
+        [{"node": "Slack: スタック検知 (一括)", "type": "main", "index": 0}]
       ]
     }
   },

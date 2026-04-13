@@ -127,6 +127,34 @@ function buildFailureMessage({ repo, issueNumber, issueTitle, channelId, threadT
   return msg;
 }
 
+function buildStuckBatchMessage({ repo, channelId, issues, timeoutSec }) {
+  const list = issues.map((i) => {
+    const updated = new Date(i.updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
+    return `• <https://github.com/${repo}/issues/${i.number}|#${i.number}> ${i.title}\n  最終更新: ${updated}`;
+  }).join('\n');
+  return {
+    channel: channelId,
+    text: `⏰ スタック検知: ${issues.length}件`,
+    blocks: [
+      { type: 'header', text: { type: 'plain_text', text: `⏰ スタック検知 (${issues.length}件)` } },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `\`ai-processing\` のまま ${timeoutSec}秒以上経過した Issue を検知しました。\n全て \`ai-failed\` に変更済みです。\n\n${list}`
+        }
+      },
+      {
+        type: 'context',
+        elements: [{
+          type: 'mrkdwn',
+          text: `<https://github.com/${repo}|${repo}> | リトライ: \`ai-ready\` ラベルを再付与してください`
+        }]
+      }
+    ]
+  };
+}
+
 function buildStuckMessage({ repo, issueNumber, issueTitle, channelId, updatedAt, timeoutSec }) {
   const issueUrl = `https://github.com/${repo}/issues/${issueNumber}`;
   const updatedAtStr = new Date(updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
@@ -248,6 +276,14 @@ async function main() {
         timeoutSec: args.timeoutSec || process.env.CLAUDE_TIMEOUT_SEC || '600'
       });
       break;
+    case 'stuck-batch':
+      payload = buildStuckBatchMessage({
+        repo,
+        channelId,
+        issues: args.issues || [],
+        timeoutSec: args.timeoutSec || process.env.WORKFLOW_TIMEOUT_SEC || '660'
+      });
+      break;
     default:
       process.stderr.write(`Unknown message type: ${args.type}\n`);
       process.exit(0);
@@ -265,4 +301,14 @@ async function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  buildStartMessage,
+  buildSuccessMessage,
+  buildFailureMessage,
+  buildStuckMessage,
+  buildStuckBatchMessage
+};
