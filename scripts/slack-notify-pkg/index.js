@@ -21,6 +21,36 @@ const STUCK_BATCH_TITLE_MAX = 80;
 
 const PR_NUMBER_PATTERN = /\/pull\/(\d+)/;
 
+// Redact well-known secret shapes before any error text leaves the
+// trust boundary (Slack, GitHub Issue comment). Defense-in-depth — the
+// upstream tools shouldn't leak these, but Claude Code / gh CLI stderr
+// has occasionally surfaced Authorization headers during network errors.
+// Order matters: the Authorization-header pattern must run first so it
+// consumes "Authorization: Bearer <token>" as a whole line. Otherwise the
+// Bearer rule alone would only replace the "Bearer" keyword and leave the
+// token value behind when the separator between them is a single space.
+const SECRET_PATTERNS = [
+  /\bAuthorization:[^\n\r]*/gi,                   // Authorization: ... to end of line
+  /\bBearer\s+[A-Za-z0-9._~+/=-]{8,}/gi,          // Bare Bearer tokens
+  /xox[baprs]-[A-Za-z0-9-]{10,}/g,                // Slack tokens
+  /ghp_[A-Za-z0-9]{20,}/g,                        // GitHub personal access tokens
+  /gho_[A-Za-z0-9]{20,}/g,                        // GitHub OAuth tokens
+  /ghu_[A-Za-z0-9]{20,}/g,                        // GitHub user-to-server tokens
+  /ghs_[A-Za-z0-9]{20,}/g,                        // GitHub server-to-server tokens
+  /ghr_[A-Za-z0-9]{20,}/g,                        // GitHub refresh tokens
+  /github_pat_[A-Za-z0-9_]{20,}/g,                // GitHub fine-grained PATs
+  /sk-ant-[A-Za-z0-9_-]{20,}/g                    // Anthropic API keys
+];
+
+function scrubSecrets(text) {
+  if (text === undefined || text === null) return text;
+  let out = text.toString();
+  for (const re of SECRET_PATTERNS) {
+    out = out.replace(re, '[REDACTED]');
+  }
+  return out;
+}
+
 // Extract the PR number from a GitHub PR URL. Robust against trailing
 // slashes, query strings, and fragments ("#/files" etc.). Returns the
 // trailing /pulls path as a placeholder when no PR number can be parsed.
@@ -246,7 +276,7 @@ function buildStuckMessage({ repo, issueNumber, issueTitle, channelId, updatedAt
 
 const PR_URL_PATTERN = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/;
 const DEFAULT_CLAUDE_TIMEOUT_SEC = '600';
-const DEFAULT_WORKFLOW_TIMEOUT_SEC = '660';
+const DEFAULT_STUCK_THRESHOLD_SEC = '1200';
 
 function extractPrUrl(stdout) {
   if (stdout === undefined || stdout === null) return null;
@@ -256,7 +286,7 @@ function extractPrUrl(stdout) {
 
 function resolveFailureError(runClaudeOutput, timeoutSec) {
   const raw = ((runClaudeOutput && (runClaudeOutput.error || runClaudeOutput.stderr)) || '').toString().trim();
-  if (raw) return raw;
+  if (raw) return scrubSecrets(raw);
   return `タイムアウトまたは不明なエラー（Claude Code 上限: ${timeoutSec}秒）`;
 }
 
@@ -289,28 +319,35 @@ const STRATEGIES = {
     // even if they weren't watching the Issue's thread.
     replyBroadcast: true
   }),
-  failure: ({ issue, env, threadTs, runClaudeOutput, executionUrl, executionStartedAt }) => ({
-    message: buildFailureMessage({
-      repo: env.GITHUB_REPO,
-      issueNumber: issue.number,
-      issueTitle: issue.title,
-      channelId: env.SLACK_CHANNEL_ID,
-      threadTs,
-      error: resolveFailureError(
-        runClaudeOutput,
-        env.CLAUDE_TIMEOUT_SEC || DEFAULT_CLAUDE_TIMEOUT_SEC
-      ),
-      executionUrl,
-      executionStartedAt
-    }),
-    replyBroadcast: true
-  }),
+  failure: ({ issue, env, threadTs, runClaudeOutput, executionUrl, executionStartedAt }) => {
+    const errorText = resolveFailureError(
+      runClaudeOutput,
+      env.CLAUDE_TIMEOUT_SEC || DEFAULT_CLAUDE_TIMEOUT_SEC
+    );
+    return {
+      message: buildFailureMessage({
+        repo: env.GITHUB_REPO,
+        issueNumber: issue.number,
+        issueTitle: issue.title,
+        channelId: env.SLACK_CHANNEL_ID,
+        threadTs,
+        error: errorText,
+        executionUrl,
+        executionStartedAt
+      }),
+      replyBroadcast: true,
+      // Surface the scrubbed error text so the GitHub comment node can
+      // reuse the same resolved string instead of duplicating the
+      // error/stderr/timeout fallback logic in a workflow expression.
+      errorText
+    };
+  },
   'stuck-batch': ({ env, issues }) => ({
     message: buildStuckBatchMessage({
       repo: env.GITHUB_REPO,
       channelId: env.SLACK_CHANNEL_ID,
       issues: issues || [],
-      timeoutSec: env.WORKFLOW_TIMEOUT_SEC || DEFAULT_WORKFLOW_TIMEOUT_SEC
+      timeoutSec: env.STUCK_THRESHOLD_SEC || DEFAULT_STUCK_THRESHOLD_SEC
     }),
     replyBroadcast: false
   })
@@ -350,7 +387,7 @@ function buildPayloadForContext(context) {
   if (!strategy) {
     throw new Error(`Unknown payload kind: ${context.kind}`);
   }
-  const { message, replyBroadcast } = strategy({
+  const { message, replyBroadcast, errorText } = strategy({
     issue: context.issue,
     env: context.env || {},
     threadTs: context.threadTs,
@@ -360,7 +397,7 @@ function buildPayloadForContext(context) {
     issues: context.issues
   });
 
-  return {
+  const payload = {
     channel: message.channel,
     text: message.text,
     blocks: message.blocks,
@@ -368,6 +405,8 @@ function buildPayloadForContext(context) {
     thread_ts: message.thread_ts || '',
     reply_broadcast: Boolean(replyBroadcast)
   };
+  if (errorText !== undefined) payload.errorText = errorText;
+  return payload;
 }
 
 module.exports = {
@@ -381,6 +420,7 @@ module.exports = {
   extractPrNumber,
   elapsedSinceStart,
   resolveFailureError,
+  scrubSecrets,
   rememberThread,
   MAX_THREAD_ENTRIES,
   SLACK_SECTION_TEXT_LIMIT,
