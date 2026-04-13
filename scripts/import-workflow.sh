@@ -24,17 +24,29 @@ for workflow_file in "$WORKFLOW_DIR"/*.json; do
 
   if [ -n "$existing_id" ]; then
     echo "  found existing workflow (id=$existing_id), updating..."
-    curl -s -X PUT "$N8N_URL/api/v1/workflows/$existing_id" \
+    response=$(curl -s -w "\n%{http_code}" -X PUT "$N8N_URL/api/v1/workflows/$existing_id" \
       -H "X-N8N-API-KEY: $N8N_API_KEY" \
       -H "Content-Type: application/json" \
-      -d @"$workflow_file" | jq '.id, .name'
-    echo "  updated: $wf_name"
+      -d @"$workflow_file")
+    method="update"
   else
-    curl -s -X POST "$N8N_URL/api/v1/workflows" \
+    response=$(curl -s -w "\n%{http_code}" -X POST "$N8N_URL/api/v1/workflows" \
       -H "X-N8N-API-KEY: $N8N_API_KEY" \
       -H "Content-Type: application/json" \
-      -d @"$workflow_file" | jq '.id, .name'
-    echo "  created: $wf_name"
+      -d @"$workflow_file")
+    method="create"
+  fi
+
+  http_code=$(echo "$response" | tail -n1)
+  body=$(echo "$response" | sed '$d')
+
+  if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+    result_id=$(echo "$body" | jq -r '.id // "unknown"')
+    echo "  ✅ ${method}d: $wf_name (id=$result_id)"
+  else
+    echo "  ❌ ${method} failed (HTTP $http_code)"
+    echo "  response: $body"
+    exit 1
   fi
 done
 
