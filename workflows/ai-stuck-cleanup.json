@@ -20,13 +20,11 @@
     },
     {
       "parameters": {
-        "resource": "issue",
-        "operation": "getAll",
+        "resource": "repository",
         "owner": "={{ $env.GITHUB_REPO.split('/')[0] }}",
         "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
-        "returnAll": false,
         "limit": 100,
-        "filters": {
+        "getRepositoryIssuesFilters": {
           "labels": "ai-processing",
           "state": "open"
         }
