@@ -47,7 +47,19 @@ SLACK_CHANNEL_ID=C0XXXXXXXXX      # 通知先チャンネル ID
 
 ## 動作確認
 
-n8n コンテナ内でスクリプトを直接実行してテストする。
+### ユニットテスト
+
+`scripts/slack-notify.js` の Block Kit メッセージ生成ロジックをユニットテストで検証する。Slack API 呼び出しはモックしないので、実環境への副作用はない。
+
+```bash
+node --test scripts/slack-notify.test.js
+```
+
+全テストが合格すれば、メッセージ生成ロジックに問題はない。メッセージ種別（start / success / failure / stuck / stuck-batch）を追加・修正したときは、`scripts/slack-notify.test.js` にテストを追加する。
+
+### 実送信テスト
+
+n8n コンテナ内でスクリプトを直接実行して、実際にチャンネルへメッセージが届くかを確認する。
 
 ```bash
 docker compose exec n8n node /opt/scripts/slack-notify.js \
