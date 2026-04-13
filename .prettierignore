@@ -1,0 +1,9 @@
+node_modules
+mcp-server/node_modules
+mcp-server/dist
+mcp-server/package-lock.json
+data
+workflows
+.env
+.env.*
+package-lock.json

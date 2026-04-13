@@ -3,6 +3,9 @@ data/
 .claude/
 RoadMap.md
 
+# Node (root tooling)
+node_modules/
+
 # MCP server
 mcp-server/dist/
 mcp-server/node_modules/

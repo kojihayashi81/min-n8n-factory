@@ -1,0 +1,23 @@
+{
+  "name": "min-n8n-factory",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Root tooling for lint/format/test automation (Husky + lint-staged).",
+  "scripts": {
+    "prepare": "husky",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint:md": "markdownlint \"**/*.md\" --ignore node_modules --ignore mcp-server/node_modules --ignore mcp-server/dist --ignore data",
+    "lint:md:fix": "markdownlint \"**/*.md\" --ignore node_modules --ignore mcp-server/node_modules --ignore mcp-server/dist --ignore data --fix",
+    "lint": "npm run lint:md",
+    "test:scripts": "node --test scripts/*.test.js",
+    "test:mcp": "npm test --prefix mcp-server",
+    "test": "npm run test:scripts && npm run test:mcp"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10",
+    "markdownlint-cli": "^0.42.0",
+    "prettier": "^3.3.3"
+  }
+}
