@@ -60,7 +60,7 @@ n8n 実装上の注意:
 
 ```text
 [Header]  ⏰ スタック検知 (3件)
-[Section] ai-processing のまま 660秒以上経過した Issue を検知しました。
+[Section] ai-processing のまま 1200秒以上経過した Issue を検知しました。
           全て ai-failed に変更済みです。
 
           • #42 ログイン画面のエラーハンドリング改善
@@ -224,7 +224,7 @@ n8n 実装上の注意:
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": "`ai-processing` のまま 660秒以上経過した Issue を検知しました。\n全て `ai-failed` に変更済みです。\n\n• <https://github.com/owner/repo/issues/42|#42> ログイン画面のエラーハンドリング改善\n  最終更新: 2026-04-12 14:20\n• <https://github.com/owner/repo/issues/43|#43> バリデーションの修正\n  最終更新: 2026-04-12 14:25\n• <https://github.com/owner/repo/issues/44|#44> ヘッダーのリンク切れ\n  最終更新: 2026-04-12 14:30"
+        "text": "`ai-processing` のまま 1200秒以上経過した Issue を検知しました。\n全て `ai-failed` に変更済みです。\n\n• <https://github.com/owner/repo/issues/42|#42> ログイン画面のエラーハンドリング改善\n  最終更新: 2026-04-12 14:20\n• <https://github.com/owner/repo/issues/43|#43> バリデーションの修正\n  最終更新: 2026-04-12 14:25\n• <https://github.com/owner/repo/issues/44|#44> ヘッダーのリンク切れ\n  最終更新: 2026-04-12 14:30"
       }
     },
     {

@@ -65,7 +65,7 @@ n8n のワークフローでは、各 Slack 通知を次の 2 段構成で送信
 1. **Code ノード**: `require('slack-notify')` でテンプレート関数を呼び、Block Kit payload を生成
 2. **Slack ノード**: 生成された payload(`channel` / `text` / `blocks` / `thread_ts`)を受け取り、credential 経由で `chat.postMessage` を叩く
 
-テンプレート関数は [`scripts/slack-notify-pkg/index.js`](../../scripts/slack-notify-pkg/index.js) に集約されており、docker-compose.yml から `/home/node/.n8n/node_modules/slack-notify` へマウントされている。`NODE_FUNCTION_ALLOW_EXTERNAL=slack-notify` が Code ノードの require を許可している。
+テンプレート関数は [`scripts/slack-notify-pkg/index.js`](../../scripts/slack-notify-pkg/index.js) に集約されており、docker-compose.yml から `/opt/n8n-user-modules/node_modules/slack-notify` へマウントされている。`NODE_PATH=/opt/n8n-user-modules/node_modules` で Node のモジュール解決に載せ、`NODE_FUNCTION_ALLOW_EXTERNAL=slack-notify` が Code ノードの require を許可している。マウント先を n8n 本体の `node_modules` ではなくプロジェクト専用 prefix に置くことで、n8n バージョンアップで内部レイアウトが変わっても壊れない設計にしている。
 
 テンプレートの変更手順:
 
