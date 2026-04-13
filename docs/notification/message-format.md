@@ -54,17 +54,22 @@ n8n 実装上の注意:
 [Actions] [ 📋 Issue #42 ]  [ 🔗 n8n実行ログ ]
 ```
 
-## スタック検知メッセージ（チャンネル直接投稿）
+## スタック検知メッセージ（一括通知）
 
-ai-stuck-cleanup ワークフローが検知した場合の通知。スレッドの親メッセージが存在しない可能性があるため、チャンネルに直接投稿する。
+スタック検知済みの Issue を1メッセージにまとめてチャンネルに投稿する。ワークフローの処理フロー詳細は [docs/workflows/ai-stuck-cleanup.md](../workflows/ai-stuck-cleanup.md) を参照。
 
 ```text
-[Header]  ⏰ スタック検知
-[Section] • ai-processing のまま 600秒以上経過
-          • ai-failed に変更済み
-          • リトライ: ai-ready ラベルを再付与してください
-[Context] owner/repo | issues/42 | 最終更新: 2026-04-12 14:20
-[Actions] [ 📋 Issue #42 ]
+[Header]  ⏰ スタック検知 (3件)
+[Section] ai-processing のまま 660秒以上経過した Issue を検知しました。
+          全て ai-failed に変更済みです。
+
+          • #42 ログイン画面のエラーハンドリング改善
+            最終更新: 2026-04-12 14:20
+          • #43 バリデーションの修正
+            最終更新: 2026-04-12 14:25
+          • #44 ヘッダーのリンク切れ
+            最終更新: 2026-04-12 14:30
+[Context] owner/repo | リトライ: ai-ready ラベルを再付与してください
 ```
 
 ## Block Kit JSON
@@ -204,22 +209,22 @@ ai-stuck-cleanup ワークフローが検知した場合の通知。スレッド
 }
 ```
 
-### JSON: スタック検知（チャンネル直接投稿）
+### JSON: スタック検知（一括通知）
 
 ```json
 {
   "channel": "C0XXXXXXXXX",
-  "text": "⏰ スタック検知: #42 ログイン画面のエラーハンドリング改善",
+  "text": "⏰ スタック検知: 3件",
   "blocks": [
     {
       "type": "header",
-      "text": { "type": "plain_text", "text": "⏰ スタック検知" }
+      "text": { "type": "plain_text", "text": "⏰ スタック検知 (3件)" }
     },
     {
       "type": "section",
       "text": {
         "type": "mrkdwn",
-        "text": "• ai-processing のまま 600秒以上経過\n• ai-failed に変更済み\n• リトライ: ai-ready ラベルを再付与してください"
+        "text": "`ai-processing` のまま 660秒以上経過した Issue を検知しました。\n全て `ai-failed` に変更済みです。\n\n• <https://github.com/owner/repo/issues/42|#42> ログイン画面のエラーハンドリング改善\n  最終更新: 2026-04-12 14:20\n• <https://github.com/owner/repo/issues/43|#43> バリデーションの修正\n  最終更新: 2026-04-12 14:25\n• <https://github.com/owner/repo/issues/44|#44> ヘッダーのリンク切れ\n  最終更新: 2026-04-12 14:30"
       }
     },
     {
@@ -227,17 +232,7 @@ ai-stuck-cleanup ワークフローが検知した場合の通知。スレッド
       "elements": [
         {
           "type": "mrkdwn",
-          "text": "owner/repo | issues/42 | 最終更新: 2026-04-12 14:20"
-        }
-      ]
-    },
-    {
-      "type": "actions",
-      "elements": [
-        {
-          "type": "button",
-          "text": { "type": "plain_text", "text": "📋 Issue #42" },
-          "url": "https://github.com/owner/repo/issues/42"
+          "text": "<https://github.com/owner/repo|owner/repo> | リトライ: `ai-ready` ラベルを再付与してください"
         }
       ]
     }
