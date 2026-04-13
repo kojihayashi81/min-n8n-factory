@@ -16,7 +16,7 @@
       "name": "Schedule 30min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [100, 300]
+      "position": [112, 300]
     },
     {
       "parameters": {
@@ -33,7 +33,7 @@
       "name": "Get ai-processing Issues",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [300, 300],
+      "position": [332, 300],
       "credentials": {}
     },
     {
@@ -62,7 +62,7 @@
       "name": "Stale? (updated_at > TIMEOUT)",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [500, 300],
+      "position": [552, 300],
       "notes": "最終更新からタイムアウト秒数以上経過した Issue をスタックと判定"
     },
     {
@@ -80,7 +80,7 @@
       "name": "Set ai-failed label",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [700, 200],
+      "position": [772, 200],
       "credentials": {}
     },
     {
@@ -96,7 +96,7 @@
       "name": "Post Stuck Comment",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [900, 200],
+      "position": [992, 200],
       "credentials": {}
     },
     {
@@ -116,19 +116,47 @@
       "name": "Aggregate Stuck Issues",
       "type": "n8n-nodes-base.aggregate",
       "typeVersion": 1,
-      "position": [1100, 200],
+      "position": [1212, 200],
       "notes": "スタック検知済み Issue を1件にまとめてバッチ通知用に集約"
     },
     {
       "parameters": {
-        "command": "={{ 'node /opt/scripts/slack-notify.js ' + encodeURIComponent(JSON.stringify({type: 'stuck-batch', issues: $json.number.map((n, i) => ({number: n, title: $json.title[i], updatedAt: $json.updated_at[i]})), timeoutSec: $env.WORKFLOW_TIMEOUT_SEC || '660'})) }}"
+        "jsCode": "const t = require('slack-notify');\nconst agg = $input.first().json;\nconst issues = agg.number.map((n, i) => ({\n  number: n,\n  title: agg.title[i],\n  updatedAt: agg.updated_at[i]\n}));\nconst payload = t.buildStuckBatchMessage({\n  repo: $env.GITHUB_REPO,\n  channelId: $env.SLACK_CHANNEL_ID,\n  issues,\n  timeoutSec: $env.WORKFLOW_TIMEOUT_SEC || '660'\n});\nreturn [{ json: { ...payload, blocksJson: JSON.stringify({ blocks: payload.blocks }) } }];"
+      },
+      "id": "node-build-stuck-payload",
+      "name": "Build stuck-batch payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1432, 200],
+      "notes": "集約済み Issue リストから Block Kit バッチ通知を組み立てる"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.channel }}"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ $json.blocksJson }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
       },
       "id": "node-slack-stuck",
       "name": "Slack: スタック検知 (一括)",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [1300, 200],
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [1652, 200],
       "onError": "continueRegularOutput",
+      "credentials": {
+        "slackApi": {
+          "name": "Slack Bot"
+        }
+      },
       "notes": "スタック検知済み Issue をまとめて1件のメッセージで通知"
     }
   ],
@@ -160,6 +188,11 @@
       ]
     },
     "Aggregate Stuck Issues": {
+      "main": [
+        [{"node": "Build stuck-batch payload", "type": "main", "index": 0}]
+      ]
+    },
+    "Build stuck-batch payload": {
       "main": [
         [{"node": "Slack: スタック検知 (一括)", "type": "main", "index": 0}]
       ]

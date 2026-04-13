@@ -34,7 +34,7 @@
       "name": "Get oldest ai-ready Issue",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [304, 304],
+      "position": [332, 304],
       "credentials": {}
     },
     {
@@ -76,7 +76,7 @@
       "name": "If",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
-      "position": [496, 304]
+      "position": [552, 304]
     },
     {
       "parameters": {
@@ -96,20 +96,64 @@
       "name": "Set ai-processing label",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [704, 208],
+      "position": [772, 208],
       "credentials": {}
     },
     {
       "parameters": {
-        "command": "={{ 'node /opt/scripts/slack-notify.js ' + encodeURIComponent(JSON.stringify({type: 'start', issueNumber: $('Get oldest ai-ready Issue').item.json.number, issueTitle: $('Get oldest ai-ready Issue').item.json.title})) }}"
+        "jsCode": "const t = require('slack-notify');\nconst issue = $('Get oldest ai-ready Issue').first().json;\nconst staticData = $getWorkflowStaticData('global');\nconst threadMap = staticData.slackThreads || (staticData.slackThreads = {});\nconst threadTs = threadMap[issue.number] || undefined;\nconst payload = t.buildStartMessage({\n  repo: $env.GITHUB_REPO,\n  issueNumber: issue.number,\n  issueTitle: issue.title,\n  channelId: $env.SLACK_CHANNEL_ID,\n  threadTs\n});\nreturn [{ json: { ...payload, blocksJson: JSON.stringify({ blocks: payload.blocks }) } }];"
+      },
+      "id": "node-build-start-payload",
+      "name": "Build start payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [992, 208],
+      "notes": "require('slack-notify') でテンプレートを適用し Slack ノードに渡す Block Kit を生成する"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.channel }}"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ $json.blocksJson }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $json.thread_ts }}"
+            }
+          }
+        }
       },
       "id": "node-slack-start",
       "name": "Slack: 処理開始",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [912, 208],
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [1212, 208],
       "onError": "continueRegularOutput",
-      "notes": "親メッセージを投稿し ts を stdout に出力。スレッド返信で使用する"
+      "credentials": {
+        "slackApi": {
+          "name": "Slack Bot"
+        }
+      },
+      "notes": "初回は親メッセージ、再試行時は元スレッドへの返信として投稿する"
+    },
+    {
+      "parameters": {
+        "jsCode": "const issue = $('Get oldest ai-ready Issue').first().json;\nconst staticData = $getWorkflowStaticData('global');\nconst threadMap = staticData.slackThreads || (staticData.slackThreads = {});\nif (!threadMap[issue.number]) {\n  threadMap[issue.number] = $input.first().json.message_timestamp;\n}\nreturn $input.all();"
+      },
+      "id": "node-persist-thread-ts",
+      "name": "Persist thread ts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1432, 208],
+      "notes": "初回実行時のみ、Slack 親メッセージの ts を workflow static data に保存する。再試行時はスキップ"
     },
     {
       "parameters": {
@@ -119,7 +163,7 @@
       "name": "Run Claude Code",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
-      "position": [1120, 208],
+      "position": [1652, 208],
       "onError": "continueErrorOutput",
       "notes": "stdout: PR URL / stderr: --verbose ツール呼び出しログ（n8n Executions に7日間保存）"
     },
@@ -135,7 +179,7 @@
       "name": "Post PR Link to Issue",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1328, 108],
+      "position": [1872, 108],
       "onError": "continueErrorOutput",
       "credentials": {}
     },
@@ -154,19 +198,53 @@
       "name": "Set ai-investigated label",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1536, 108],
+      "position": [2092, 108],
       "credentials": {}
     },
     {
       "parameters": {
-        "command": "={{ 'node /opt/scripts/slack-notify.js ' + encodeURIComponent(JSON.stringify({type: 'success', issueNumber: $('Get oldest ai-ready Issue').item.json.number, issueTitle: $('Get oldest ai-ready Issue').item.json.title, threadTs: $('Slack: 処理開始').item.json.stdout.trim(), prUrl: $('Run Claude Code').item.json.stdout.trim()})) }}"
+        "jsCode": "const t = require('slack-notify');\nconst issue = $('Get oldest ai-ready Issue').first().json;\nconst staticData = $getWorkflowStaticData('global');\nconst threadMap = staticData.slackThreads || {};\nconst threadTs = threadMap[issue.number] || $('Slack: 処理開始').first().json.message_timestamp;\nconst payload = t.buildSuccessMessage({\n  repo: $env.GITHUB_REPO,\n  issueNumber: issue.number,\n  issueTitle: issue.title,\n  channelId: $env.SLACK_CHANNEL_ID,\n  threadTs,\n  prUrl: $('Run Claude Code').first().json.stdout.trim()\n});\nreturn [{ json: { ...payload, blocksJson: JSON.stringify({ blocks: payload.blocks }) } }];"
+      },
+      "id": "node-build-success-payload",
+      "name": "Build success payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2312, 108],
+      "notes": "成功時のスレッド返信用 Block Kit を組み立てる"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.channel }}"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ $json.blocksJson }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $json.thread_ts }}",
+              "reply_broadcast": true
+            }
+          }
+        }
       },
       "id": "node-slack-success",
       "name": "Slack: 調査完了",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [1744, 108],
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [2532, 108],
       "onError": "continueRegularOutput",
+      "credentials": {
+        "slackApi": {
+          "name": "Slack Bot"
+        }
+      },
       "notes": "成功時のスレッド返信（Issue / PR ボタン付き）"
     },
     {
@@ -184,7 +262,7 @@
       "name": "Set ai-failed label",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1328, 420],
+      "position": [1872, 420],
       "credentials": {}
     },
     {
@@ -194,25 +272,59 @@
         "owner": "={{ $env.GITHUB_REPO.split('/')[0] }}",
         "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
         "issueNumber": "={{ $('Get oldest ai-ready Issue').item.json.number }}",
-        "body": "={{ '調査中にエラーが発生しました（タイムアウトまたは予期しないエラー）。再試行するには `ai-ready` ラベルを付け直してください。\\n\\n```\\n' + ($('Run Claude Code').item.json.stderr || 'タイムアウト（' + ($env.CLAUDE_TIMEOUT_SEC || '600') + '秒）') + '\\n```' }}"
+        "body": "={{ '調査中にエラーが発生しました（タイムアウトまたは予期しないエラー）。再試行するには `ai-ready` ラベルを付け直してください。\\n\\n```\\n' + (($('Run Claude Code').item.json.error || $('Run Claude Code').item.json.stderr || ('タイムアウトまたは不明なエラー（Claude Code 上限: ' + ($env.CLAUDE_TIMEOUT_SEC || '600') + '秒）')).toString().trim()) + '\\n```' }}"
       },
       "id": "node-post-error-comment",
       "name": "Post Error Comment",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [1536, 420],
+      "position": [2092, 420],
       "credentials": {}
     },
     {
       "parameters": {
-        "command": "={{ 'node /opt/scripts/slack-notify.js ' + encodeURIComponent(JSON.stringify({type: 'failure', issueNumber: $('Get oldest ai-ready Issue').item.json.number, issueTitle: $('Get oldest ai-ready Issue').item.json.title, threadTs: $('Slack: 処理開始').item.json.stdout.trim(), error: $('Run Claude Code').item.json.stderr || 'タイムアウト（' + ($env.CLAUDE_TIMEOUT_SEC || '600') + '秒）', executionUrl: 'http://localhost:5678/workflow/' + $workflow.id + '/executions/' + $execution.id})) }}"
+        "jsCode": "const t = require('slack-notify');\nconst issue = $('Get oldest ai-ready Issue').first().json;\nconst timeoutSec = $env.CLAUDE_TIMEOUT_SEC || '600';\nconst runClaude = $('Run Claude Code').first().json;\nconst rawError = (runClaude.error || runClaude.stderr || '').trim();\nconst errorMsg = rawError || `タイムアウトまたは不明なエラー（Claude Code 上限: ${timeoutSec}秒）`;\nconst staticData = $getWorkflowStaticData('global');\nconst threadMap = staticData.slackThreads || {};\nconst threadTs = threadMap[issue.number] || $('Slack: 処理開始').first().json.message_timestamp;\nconst payload = t.buildFailureMessage({\n  repo: $env.GITHUB_REPO,\n  issueNumber: issue.number,\n  issueTitle: issue.title,\n  channelId: $env.SLACK_CHANNEL_ID,\n  threadTs,\n  error: errorMsg,\n  executionUrl: `http://localhost:5678/workflow/${$workflow.id}/executions/${$execution.id}`\n});\nreturn [{ json: { ...payload, blocksJson: JSON.stringify({ blocks: payload.blocks }) } }];"
+      },
+      "id": "node-build-failure-payload",
+      "name": "Build failure payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2312, 420],
+      "notes": "失敗時のスレッド返信用 Block Kit（エラー詳細 + 実行ログリンク）を組み立てる"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $json.channel }}"
+        },
+        "messageType": "block",
+        "blocksUi": "={{ $json.blocksJson }}",
+        "text": "={{ $json.text }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $json.thread_ts }}",
+              "reply_broadcast": true
+            }
+          }
+        }
       },
       "id": "node-slack-failure",
       "name": "Slack: 処理失敗",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [1744, 420],
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [2532, 420],
       "onError": "continueRegularOutput",
+      "credentials": {
+        "slackApi": {
+          "name": "Slack Bot"
+        }
+      },
       "notes": "失敗時のスレッド返信（エラー詳細 + リトライ案内 + n8n実行ログボタン付き）"
     }
   ],
@@ -234,10 +346,20 @@
     },
     "Set ai-processing label": {
       "main": [
+        [{"node": "Build start payload", "type": "main", "index": 0}]
+      ]
+    },
+    "Build start payload": {
+      "main": [
         [{"node": "Slack: 処理開始", "type": "main", "index": 0}]
       ]
     },
     "Slack: 処理開始": {
+      "main": [
+        [{"node": "Persist thread ts", "type": "main", "index": 0}]
+      ]
+    },
+    "Persist thread ts": {
       "main": [
         [{"node": "Run Claude Code", "type": "main", "index": 0}]
       ]
@@ -256,6 +378,11 @@
     },
     "Set ai-investigated label": {
       "main": [
+        [{"node": "Build success payload", "type": "main", "index": 0}]
+      ]
+    },
+    "Build success payload": {
+      "main": [
         [{"node": "Slack: 調査完了", "type": "main", "index": 0}]
       ]
     },
@@ -265,6 +392,11 @@
       ]
     },
     "Post Error Comment": {
+      "main": [
+        [{"node": "Build failure payload", "type": "main", "index": 0}]
+      ]
+    },
+    "Build failure payload": {
       "main": [
         [{"node": "Slack: 処理失敗", "type": "main", "index": 0}]
       ]

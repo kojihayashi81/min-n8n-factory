@@ -1,14 +1,16 @@
-#!/usr/bin/env node
 'use strict';
 
-const https = require('https');
+// Slack Block Kit templates for n8n notifications.
+// Pure data builders — no I/O. Invoked from n8n Code nodes via require().
+//
+// Navigation: URL buttons in `actions` blocks. Slack shows an
+// "interactivity not configured" warning on first click unless the app has
+// Interactivity & Shortcuts enabled — this is accepted intentionally.
 
-// ─── Block Kit Templates ────────────────────────────────────────
-
-function buildStartMessage({ repo, issueNumber, issueTitle, channelId }) {
+function buildStartMessage({ repo, issueNumber, issueTitle, channelId, threadTs }) {
   const issueUrl = `https://github.com/${repo}/issues/${issueNumber}`;
   const now = new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
-  return {
+  const msg = {
     channel: channelId,
     text: `🔄 処理開始: #${issueNumber} ${issueTitle}`,
     blocks: [
@@ -17,12 +19,15 @@ function buildStartMessage({ repo, issueNumber, issueTitle, channelId }) {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `<${issueUrl}|#${issueNumber} ${issueTitle}>`
+          text: `#${issueNumber} ${issueTitle}`
         }
       },
       {
         type: 'context',
-        elements: [{ type: 'mrkdwn', text: `<https://github.com/${repo}|${repo}> | issues/${issueNumber} | ${now}` }]
+        elements: [{
+          type: 'mrkdwn',
+          text: `${repo} | issues/${issueNumber} | ${now}`
+        }]
       },
       {
         type: 'actions',
@@ -36,6 +41,8 @@ function buildStartMessage({ repo, issueNumber, issueTitle, channelId }) {
       }
     ]
   };
+  if (threadTs) msg.thread_ts = threadTs;
+  return msg;
 }
 
 function buildSuccessMessage({ repo, issueNumber, issueTitle, channelId, threadTs, prUrl }) {
@@ -148,7 +155,7 @@ function buildStuckBatchMessage({ repo, channelId, issues, timeoutSec }) {
         type: 'context',
         elements: [{
           type: 'mrkdwn',
-          text: `<https://github.com/${repo}|${repo}> | リトライ: \`ai-ready\` ラベルを再付与してください`
+          text: `${repo} | リトライ: \`ai-ready\` ラベルを再付与してください`
         }]
       }
     ]
@@ -189,120 +196,6 @@ function buildStuckMessage({ repo, issueNumber, issueTitle, channelId, updatedAt
       }
     ]
   };
-}
-
-// ─── Slack API ──────────────────────────────────────────────────
-
-function postMessage(token, payload) {
-  return new Promise((resolve, reject) => {
-    const data = JSON.stringify(payload);
-    const req = https.request({
-      hostname: 'slack.com',
-      path: '/api/chat.postMessage',
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json; charset=utf-8',
-        'Content-Length': Buffer.byteLength(data)
-      }
-    }, (res) => {
-      let body = '';
-      res.on('data', (chunk) => { body += chunk; });
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(body));
-        } catch (e) {
-          reject(new Error(`Invalid JSON response: ${body}`));
-        }
-      });
-    });
-    req.on('error', reject);
-    req.write(data);
-    req.end();
-  });
-}
-
-// ─── Main ───────────────────────────────────────────────────────
-
-async function main() {
-  const encoded = process.argv[2];
-  if (!encoded) {
-    process.stderr.write('Usage: slack-notify.js <encodeURIComponent-encoded JSON>\n');
-    process.exit(0);
-  }
-
-  const args = JSON.parse(decodeURIComponent(encoded));
-
-  const token = process.env.SLACK_BOT_TOKEN;
-  if (!token) {
-    process.stderr.write('SLACK_BOT_TOKEN is not set — skipping Slack notification\n');
-    process.exit(0);
-  }
-
-  const channelId = process.env.SLACK_CHANNEL_ID;
-  if (!channelId) {
-    process.stderr.write('SLACK_CHANNEL_ID is not set — skipping Slack notification\n');
-    process.exit(0);
-  }
-
-  const repo = args.repo || process.env.GITHUB_REPO;
-  const common = {
-    repo,
-    issueNumber: args.issueNumber,
-    issueTitle: args.issueTitle,
-    channelId
-  };
-
-  let payload;
-  switch (args.type) {
-    case 'start':
-      payload = buildStartMessage(common);
-      break;
-    case 'success':
-      payload = buildSuccessMessage({ ...common, threadTs: args.threadTs, prUrl: args.prUrl });
-      break;
-    case 'failure':
-      payload = buildFailureMessage({
-        ...common,
-        threadTs: args.threadTs,
-        error: args.error,
-        executionUrl: args.executionUrl
-      });
-      break;
-    case 'stuck':
-      payload = buildStuckMessage({
-        ...common,
-        updatedAt: args.updatedAt,
-        timeoutSec: args.timeoutSec || process.env.CLAUDE_TIMEOUT_SEC || '600'
-      });
-      break;
-    case 'stuck-batch':
-      payload = buildStuckBatchMessage({
-        repo,
-        channelId,
-        issues: args.issues || [],
-        timeoutSec: args.timeoutSec || process.env.WORKFLOW_TIMEOUT_SEC || '660'
-      });
-      break;
-    default:
-      process.stderr.write(`Unknown message type: ${args.type}\n`);
-      process.exit(0);
-  }
-
-  try {
-    const result = await postMessage(token, payload);
-    if (result.ok) {
-      process.stdout.write(result.ts || '');
-    } else {
-      process.stderr.write(`Slack API error: ${result.error}\n`);
-    }
-  } catch (err) {
-    process.stderr.write(`Slack request failed: ${err.message}\n`);
-  }
-}
-
-if (require.main === module) {
-  main();
 }
 
 module.exports = {

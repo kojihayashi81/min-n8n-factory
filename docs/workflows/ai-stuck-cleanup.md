@@ -31,6 +31,8 @@ Post Stuck Comment (Issue ごと)
   ↓
 Aggregate Stuck Issues ← 全件を1件にまとめる
   ↓
+Build stuck-batch payload (Code)
+  ↓
 Slack: スタック検知 (一括) ← 1メッセージで通知
 ```
 
@@ -44,7 +46,8 @@ Slack: スタック検知 (一括) ← 1メッセージで通知
 | `Set ai-failed label` | スタック判定された Issue のラベルを `ai-failed` に置き換える |
 | `Post Stuck Comment` | スタック判定された Issue に GitHub コメントでリトライ手順を通知 |
 | `Aggregate Stuck Issues` | スタック判定された Issue の `number`, `title`, `updated_at` を配列に集約して 1 アイテムにまとめる |
-| `Slack: スタック検知 (一括)` | `slack-notify.js` の `stuck-batch` 型で 1 メッセージとして通知 |
+| `Build stuck-batch payload` | Code ノード。`require('slack-notify')` で `buildStuckBatchMessage` を呼び Block Kit payload を生成 |
+| `Slack: スタック検知 (一括)` | Slack ノード。1 メッセージとして通知 |
 
 ## 通知の集約方針
 
@@ -56,7 +59,7 @@ Issue ごとの GitHub 操作（ラベル変更・コメント投稿）は個別
 - スタック検知は「一覧でまとめて把握したい」性質の情報であり、個別通知の必要性が低い
 - 1 Issue にスタック通知が分散してもスレッドでまとめる必要がない（親メッセージが存在しないため）
 
-メッセージフォーマットの詳細は [docs/notification/message-format.md](../notification/message-format.md) を参照。
+テンプレート本体は [`scripts/slack-notify-pkg/index.js`](../../scripts/slack-notify-pkg/index.js)、セットアップ手順は [docs/notification/slack-setup.md](../notification/slack-setup.md) を参照。
 
 ## 関連ワークフロー
 

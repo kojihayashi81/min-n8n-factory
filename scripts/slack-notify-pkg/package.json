@@ -1,0 +1,7 @@
+{
+  "name": "slack-notify",
+  "version": "1.0.0",
+  "description": "Slack Block Kit templates for n8n workflow notifications",
+  "main": "index.js",
+  "private": true
+}

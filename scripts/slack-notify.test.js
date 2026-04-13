@@ -9,7 +9,7 @@ const {
   buildFailureMessage,
   buildStuckMessage,
   buildStuckBatchMessage
-} = require('./slack-notify.js');
+} = require('./slack-notify-pkg/index.js');
 
 const COMMON = {
   repo: 'owner/repo',
@@ -42,10 +42,17 @@ test('buildStartMessage: 基本構造', () => {
   assert.equal(msg.blocks[3].type, 'actions');
 });
 
-test('buildStartMessage: Issue URL を含むリンク', () => {
+test('buildStartMessage: section にインラインリンクを含まない', () => {
   const msg = buildStartMessage(COMMON);
   const section = findBlock(msg, 'section');
-  assert.match(section.text.text, /github\.com\/owner\/repo\/issues\/42/);
+  assert.doesNotMatch(section.text.text, /<https?:\/\//);
+});
+
+test('buildStartMessage: context にリポジトリリンクを含まない', () => {
+  const msg = buildStartMessage(COMMON);
+  const context = findBlock(msg, 'context');
+  assert.doesNotMatch(context.elements[0].text, /<https?:\/\//);
+  assert.match(context.elements[0].text, /owner\/repo/);
 });
 
 test('buildStartMessage: Issue ボタンの URL', () => {
@@ -55,9 +62,19 @@ test('buildStartMessage: Issue ボタンの URL', () => {
   assert.equal(button.url, 'https://github.com/owner/repo/issues/42');
 });
 
+test('buildStartMessage: threadTs なしは thread_ts を含まない', () => {
+  const msg = buildStartMessage(COMMON);
+  assert.equal(msg.thread_ts, undefined);
+});
+
+test('buildStartMessage: threadTs 指定時はスレッド返信になる', () => {
+  const msg = buildStartMessage({ ...COMMON, threadTs: '1776000000.123456' });
+  assert.equal(msg.thread_ts, '1776000000.123456');
+});
+
 // ─── buildSuccessMessage ─────────────────────────────────────────
 
-test('buildSuccessMessage: 基本構造と PR ボタン', () => {
+test('buildSuccessMessage: 基本構造と Issue/PR ボタン', () => {
   const msg = buildSuccessMessage({
     ...COMMON,
     threadTs: String(Math.floor(Date.now() / 1000) - 192),
@@ -70,6 +87,17 @@ test('buildSuccessMessage: 基本構造と PR ボタン', () => {
   assert.ok(issueBtn);
   assert.ok(prBtn);
   assert.equal(prBtn.url, 'https://github.com/owner/repo/pull/43');
+  assert.equal(issueBtn.url, 'https://github.com/owner/repo/issues/42');
+});
+
+test('buildSuccessMessage: section にインラインリンクを含まない', () => {
+  const msg = buildSuccessMessage({
+    ...COMMON,
+    threadTs: '0',
+    prUrl: 'https://github.com/owner/repo/pull/43'
+  });
+  const section = findBlock(msg, 'section');
+  assert.doesNotMatch(section.text.text, /<https?:\/\//);
 });
 
 test('buildSuccessMessage: threadTs なしは thread_ts を含まない', () => {
@@ -83,7 +111,7 @@ test('buildSuccessMessage: threadTs なしは thread_ts を含まない', () => 
 
 // ─── buildFailureMessage ─────────────────────────────────────────
 
-test('buildFailureMessage: エラー内容とリトライ案内', () => {
+test('buildFailureMessage: エラー内容・リトライ案内・Issue/n8n実行ログボタン', () => {
   const msg = buildFailureMessage({
     ...COMMON,
     threadTs: String(Math.floor(Date.now() / 1000) - 601),
@@ -94,6 +122,7 @@ test('buildFailureMessage: エラー内容とリトライ案内', () => {
   const section = findBlock(msg, 'section');
   assert.match(section.text.text, /Claude Code タイムアウト/);
   assert.match(section.text.text, /ai-ready.*再付与/);
+  assert.doesNotMatch(section.text.text, /<https?:\/\//);
   const logBtn = findButton(msg, 'n8n実行ログ');
   assert.ok(logBtn);
   assert.equal(logBtn.url, 'http://localhost:5678/execution/xxx');
@@ -125,7 +154,7 @@ test('buildFailureMessage: error 未指定時はタイムアウト扱い', () =>
 
 // ─── buildStuckMessage ───────────────────────────────────────────
 
-test('buildStuckMessage: 基本構造', () => {
+test('buildStuckMessage: 基本構造と Issue ボタン', () => {
   const msg = buildStuckMessage({
     ...COMMON,
     updatedAt: '2026-04-12T05:20:00Z',
@@ -136,11 +165,14 @@ test('buildStuckMessage: 基本構造', () => {
   assert.match(section.text.text, /660秒以上経過/);
   assert.match(section.text.text, /ai-failed/);
   assert.match(section.text.text, /ai-ready/);
+  assert.doesNotMatch(section.text.text, /<https?:\/\//);
+  const issueBtn = findButton(msg, 'Issue #42');
+  assert.ok(issueBtn);
 });
 
 // ─── buildStuckBatchMessage ──────────────────────────────────────
 
-test('buildStuckBatchMessage: 複数 Issue の集約', () => {
+test('buildStuckBatchMessage: 複数 Issue の集約(リストは mrkdwn リンク)', () => {
   const msg = buildStuckBatchMessage({
     repo: 'owner/repo',
     channelId: 'C0XXXXXXXXX',
@@ -161,6 +193,22 @@ test('buildStuckBatchMessage: 複数 Issue の集約', () => {
   assert.match(section.text.text, /#44/);
   assert.match(section.text.text, /Issue A/);
   assert.match(section.text.text, /660秒以上経過/);
+  // Issue 一覧は視認性のため mrkdwn リンクとして残す
+  assert.match(section.text.text, /<https:\/\/github\.com\/owner\/repo\/issues\/42/);
+});
+
+test('buildStuckBatchMessage: context からリポジトリリンクが除去されている', () => {
+  const msg = buildStuckBatchMessage({
+    repo: 'owner/repo',
+    channelId: 'C0XXXXXXXXX',
+    issues: [
+      { number: 42, title: 'Test', updatedAt: '2026-04-12T05:20:00Z' }
+    ],
+    timeoutSec: '660'
+  });
+  const context = findBlock(msg, 'context');
+  assert.doesNotMatch(context.elements[0].text, /<https?:\/\//);
+  assert.match(context.elements[0].text, /owner\/repo/);
 });
 
 test('buildStuckBatchMessage: 1件でもバッチ形式で送れる', () => {
@@ -175,17 +223,4 @@ test('buildStuckBatchMessage: 1件でもバッチ形式で送れる', () => {
   assert.match(msg.text, /1件/);
   const header = findBlock(msg, 'header');
   assert.match(header.text.text, /1件/);
-});
-
-test('buildStuckBatchMessage: Issue URL が正しく埋め込まれる', () => {
-  const msg = buildStuckBatchMessage({
-    repo: 'owner/repo',
-    channelId: 'C0XXXXXXXXX',
-    issues: [
-      { number: 42, title: 'Test', updatedAt: '2026-04-12T05:20:00Z' }
-    ],
-    timeoutSec: '660'
-  });
-  const section = findBlock(msg, 'section');
-  assert.match(section.text.text, /github\.com\/owner\/repo\/issues\/42/);
 });
