@@ -203,7 +203,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const t = require('slack-notify');\nconst issue = $('Get oldest ai-ready Issue').first().json;\nconst staticData = $getWorkflowStaticData('global');\nconst threadMap = staticData.slackThreads || {};\nconst threadTs = threadMap[issue.number] || $('Slack: 処理開始').first().json.message_timestamp;\nconst payload = t.buildSuccessMessage({\n  repo: $env.GITHUB_REPO,\n  issueNumber: issue.number,\n  issueTitle: issue.title,\n  channelId: $env.SLACK_CHANNEL_ID,\n  threadTs,\n  prUrl: $('Run Claude Code').first().json.stdout.trim()\n});\nreturn [{ json: { ...payload, blocksJson: JSON.stringify({ blocks: payload.blocks }) } }];"
+        "jsCode": "const t = require('slack-notify');\nconst issue = $('Get oldest ai-ready Issue').first().json;\nconst staticData = $getWorkflowStaticData('global');\nconst threadMap = staticData.slackThreads || {};\nconst threadTs = threadMap[issue.number] || $('Slack: 処理開始').first().json.message_timestamp;\nconst rawStdout = ($('Run Claude Code').first().json.stdout || '').toString();\nconst prMatch = rawStdout.match(/https:\\/\\/github\\.com\\/[\\w.-]+\\/[\\w.-]+\\/pull\\/\\d+/);\nconst prUrl = prMatch ? prMatch[0] : `https://github.com/${$env.GITHUB_REPO}/pulls`;\nconst payload = t.buildSuccessMessage({\n  repo: $env.GITHUB_REPO,\n  issueNumber: issue.number,\n  issueTitle: issue.title,\n  channelId: $env.SLACK_CHANNEL_ID,\n  threadTs,\n  prUrl\n});\nreturn [{ json: { ...payload, blocksJson: JSON.stringify({ blocks: payload.blocks }) } }];"
       },
       "id": "node-build-success-payload",
       "name": "Build success payload",

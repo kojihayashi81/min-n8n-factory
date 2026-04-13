@@ -137,8 +137,8 @@ test('buildFailureMessage: 長いエラーメッセージを切り詰める', ()
     executionUrl: 'http://localhost:5678/execution/xxx'
   });
   const section = findBlock(msg, 'section');
-  // 200 文字に切り詰め + 後続のリトライ案内
-  assert.ok(section.text.text.length < 500);
+  // 2500 文字に切り詰め + 後続のリトライ案内
+  assert.ok(section.text.text.length < 2800);
 });
 
 test('buildFailureMessage: error 未指定時はタイムアウト扱い', () => {

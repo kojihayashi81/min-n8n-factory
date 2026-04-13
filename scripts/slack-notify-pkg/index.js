@@ -90,7 +90,7 @@ function buildSuccessMessage({ repo, issueNumber, issueTitle, channelId, threadT
 
 function buildFailureMessage({ repo, issueNumber, issueTitle, channelId, threadTs, error, executionUrl }) {
   const issueUrl = `https://github.com/${repo}/issues/${issueNumber}`;
-  const errorText = (error || 'タイムアウト').substring(0, 200);
+  const errorText = (error || 'タイムアウト').substring(0, 2500);
   const elapsed = threadTs ? Math.floor(Date.now() / 1000 - parseFloat(threadTs)) : 0;
   const min = Math.floor(elapsed / 60);
   const sec = String(elapsed % 60).padStart(2, '0');

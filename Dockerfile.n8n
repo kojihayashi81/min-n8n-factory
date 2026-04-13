@@ -1,9 +1,18 @@
+FROM alpine:3.22 AS alpine
+
 FROM n8nio/n8n:1.123.28
 
 USER root
 
-# bash + git (scripts require bash; git for worktree operations)
-RUN apk add --no-cache bash git
+# Restore apk from upstream Alpine so we can install runtime dependencies
+# (n8n >=1.123 ships as a Docker Hardened Image without a package manager).
+COPY --from=alpine /sbin/apk /sbin/apk
+COPY --from=alpine /usr/lib/libapk.so* /usr/lib/
+COPY --from=alpine /etc/apk /etc/apk
+COPY --from=alpine /lib/apk /lib/apk
+
+# bash + git + wget (scripts require bash; git for worktree operations; wget for static binary downloads)
+RUN apk add --no-cache bash git wget
 
 # docker CLI (static binary) + jq — auto-detect architecture
 ARG TARGETARCH
