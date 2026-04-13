@@ -64,11 +64,45 @@ eval $(op signin) && make auth
 
 ## コマンド
 
-| コマンド | 内容 |
-| --- | --- |
-| `make setup` | `.env` を生成 |
-| `make up` | n8n 起動 |
-| `make down` | n8n 停止 |
-| `make mcp-up` | MCP ドキュメントサーバー起動 |
-| `make mcp-down` | MCP ドキュメントサーバー停止 |
-| `make auth` | GitHub CLI 認証（1Password 連携） |
+| コマンド        | 内容                              |
+| --------------- | --------------------------------- |
+| `make setup`    | `.env` を生成                     |
+| `make up`       | n8n 起動                          |
+| `make down`     | n8n 停止                          |
+| `make mcp-up`   | MCP ドキュメントサーバー起動      |
+| `make mcp-down` | MCP ドキュメントサーバー停止      |
+| `make auth`     | GitHub CLI 認証（1Password 連携） |
+
+## 開発フック（Husky + lint-staged）
+
+ルートに `package.json` を置き、Husky + lint-staged でコミット・プッシュ前に自動チェックを走らせている。初回クローン時は以下を一度だけ実行する:
+
+```bash
+npm install
+```
+
+`npm install` 時に `husky` フックが `.husky/` からインストールされる。
+
+### pre-commit
+
+ステージされたファイルに対して lint-staged が以下を実行する:
+
+- `*.md` — `markdownlint --fix` と `prettier --write`（自動修正はコミットに含まれる）
+- `*.{js,ts,json,yml,yaml}` — `prettier --write`
+- `scripts/**` に変更があれば `npm run test:scripts`
+- `mcp-server/src/**` に変更があれば `npm run test:mcp`
+
+テストに失敗した場合はコミットがブロックされる。対象外テストはスキップされるので、小さな変更では数秒で完了する。
+
+### pre-push
+
+プッシュ直前に以下を実行する:
+
+- `npm run lint` — `markdownlint` によるリポジトリ全体の Markdown リント
+- `npm test` — `scripts/` と `mcp-server/` 両方の全テスト
+
+いずれかが失敗するとプッシュはブロックされる。
+
+### フックを一時的に回避したい場合
+
+`git commit --no-verify` / `git push --no-verify` で回避できるが、原則として使わない。フックで落ちた場合は原因を直してから再度コミットする。
