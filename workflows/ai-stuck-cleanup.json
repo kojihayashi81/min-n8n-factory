@@ -121,7 +121,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const t = require('slack-notify');\nconst agg = $input.first().json;\nconst issues = agg.number.map((n, i) => ({\n  number: n,\n  title: agg.title[i],\n  updatedAt: agg.updated_at[i]\n}));\nconst payload = t.buildStuckBatchMessage({\n  repo: $env.GITHUB_REPO,\n  channelId: $env.SLACK_CHANNEL_ID,\n  issues,\n  timeoutSec: $env.WORKFLOW_TIMEOUT_SEC || '660'\n});\nreturn [{ json: { ...payload, blocksJson: JSON.stringify({ blocks: payload.blocks }) } }];"
+        "jsCode": "const t = require('slack-notify');\nconst agg = $input.first().json;\nconst issues = agg.number.map((n, i) => ({ number: n, title: agg.title[i], updatedAt: agg.updated_at[i] }));\nreturn [{ json: t.buildPayloadForContext({\n  kind: 'stuck-batch',\n  env: $env,\n  issues\n}) }];"
       },
       "id": "node-build-stuck-payload",
       "name": "Build stuck-batch payload",
@@ -143,7 +143,13 @@
         "blocksUi": "={{ $json.blocksJson }}",
         "text": "={{ $json.text }}",
         "otherOptions": {
-          "includeLinkToWorkflow": false
+          "includeLinkToWorkflow": false,
+          "thread_ts": {
+            "replyValues": {
+              "thread_ts": "={{ $json.thread_ts }}",
+              "reply_broadcast": "={{ $json.reply_broadcast }}"
+            }
+          }
         }
       },
       "id": "node-slack-stuck",
