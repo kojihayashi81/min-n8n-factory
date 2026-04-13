@@ -107,6 +107,43 @@ claude --print --allowedTools "Read,Grep,Glob,Bash(git *),Bash(gh *),Bash(cat *)
 
 スキルの `allowed-tools` を変更した場合は、n8n スクリプト（`scripts/n8n-run-claude.sh`）の `--allowedTools` も合わせて更新すること。
 
+### 3.1. 失敗時の stdout / stderr ハンドリング（課題 #7 への回答）
+
+`claude --print` が非 0 終了した場合、n8n の `ExecuteCommand` ノード側で `error` / `stderr` フィールドに実際の失敗理由が届く必要がある。Slack 失敗通知の本文と GitHub Issue エラーコメントはどちらも `resolveFailureError({ error, stderr }, …)` を経由してこの値を取り出すため、ここが空だと全ての失敗が「タイムアウトまたは不明なエラー」というフォールバック文字列に潰れる。
+
+#### 避けるべきアンチパターン
+
+```bash
+set -euo pipefail
+CLAUDE_OUTPUT=$(timeout "$CLAUDE_TIMEOUT_SEC" devcontainer exec … claude …)
+# ↑ claude が非 0 終了 → command substitution が失敗 → set -e で即 exit
+# → 以降の echo "$CLAUDE_OUTPUT" に到達せず、stderr も n8n に届かない
+echo "$CLAUDE_OUTPUT"
+```
+
+この形だと、**claude の実際のエラー内容が一切 n8n に伝搬せず**、Slack には常に「タイムアウト」と表示される静かな観測性バグが発生する。
+
+#### 採用している構成
+
+1. stdout / stderr を個別の temp file（`mktemp`）に退避
+2. `trap 'rm -f "$CLAUDE_STDOUT" "$CLAUDE_STDERR"' EXIT` でクリーンアップを保証
+3. `timeout … claude …` を `set +e` / `set -e` で囲み、exit code を安全に捕捉
+4. 非 0 の場合は両ストリームをスクリプトの stderr にデリミタ付きで吐いた上で、claude の exit code をそのまま `exit`
+5. 成功時は `cat "$CLAUDE_STDOUT"` で素通し（`echo` と違い末尾改行を足さないので PR URL 抽出の正規表現に影響しない）
+
+これにより n8n の ExecuteCommand ノードは `stderr` フィールドに claude の実際の出力を受け取り、`Build failure payload` が `resolveFailureError` → `scrubSecrets` を通して auth / tool error / rate limit 等の実原因を Slack と Issue コメントに反映できる。
+
+#### exit code の意味
+
+| exit code | 意味 | 典型的な原因 |
+| --- | --- | --- |
+| 0 | 成功 | stdout に Draft PR URL を含む |
+| 1 | claude 側のエラー | 認証失敗、ツール実行エラー、レートリミット等（stderr に詳細） |
+| 124 | `timeout(1)` による強制終了 | `CLAUDE_TIMEOUT_SEC` 超過。stderr には超過時点までの出力が残る |
+| それ以外 | devcontainer / シェル側のエラー | worktree 未作成、trap で捕捉できなかった異常など |
+
+秘匿情報（Slack トークン / GitHub PAT / Anthropic API キー / `Authorization: Bearer …` ヘッダー）は `scripts/slack-notify-pkg/index.js` の `scrubSecrets` が Slack / Issue コメント投稿直前に `[REDACTED]` で置換するため、上記の生 stderr を通してもオペレータへの漏洩経路は塞がれている。
+
 ---
 
 ## 4. スクリプト構成
