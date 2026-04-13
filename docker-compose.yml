@@ -22,9 +22,13 @@ services:
       - WORKFLOW_TIMEOUT_SEC=${WORKFLOW_TIMEOUT_SEC:-660}
       - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
       - NODE_FUNCTION_ALLOW_EXTERNAL=slack-notify
+      # Resolve `require('slack-notify')` without coupling to n8n's
+      # internal node_modules layout. /opt/n8n-user-modules is a
+      # project-owned NODE_PATH prefix that survives n8n upgrades.
+      - NODE_PATH=/opt/n8n-user-modules/node_modules
     volumes:
       - ./data/n8n:/home/node/.n8n
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PROJECT_PATH}:${PROJECT_PATH}
       - ./scripts:/opt/scripts:ro
-      - ./scripts/slack-notify-pkg:/usr/local/lib/node_modules/n8n/node_modules/slack-notify:ro
+      - ./scripts/slack-notify-pkg:/opt/n8n-user-modules/node_modules/slack-notify:ro
