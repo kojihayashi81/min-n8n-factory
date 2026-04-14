@@ -10,9 +10,14 @@ fi
 
 # devcontainer up の返り値から containerId を取り出すヘルパー。
 # stdout には最終行の JSON があり、そこから containerId を抽出する。
+# `--mount-git-worktree-common-dir` は worktree の parent .git を
+# 追加マウントし、devcontainer 内からの git 操作を通すために必須
+# (worktree は --relative-paths で作成されている前提)。
 get_container_id() {
   local up_args=("$@")
-  devcontainer up --workspace-folder "$WORKTREE_PATH" "${up_args[@]}" 2>&1 \
+  devcontainer up --workspace-folder "$WORKTREE_PATH" \
+    --mount-git-worktree-common-dir \
+    "${up_args[@]}" 2>&1 \
     | tail -1 \
     | jq -r '.containerId'
 }
@@ -35,12 +40,18 @@ ensure_usable_container() {
   if [ -z "$container_id" ] || [ "$container_id" = "null" ]; then
     return 1
   fi
-  docker exec --workdir /workspaces "$container_id" ls -- /workspaces > /dev/null 2>&1 || return 1
-  # Also verify the workspace subdirectory is accessible as cwd; this
-  # is the specific operation that fails when the bind mount is stale.
-  local workspace_basename
-  workspace_basename="$(basename "$WORKTREE_PATH")"
-  docker exec --workdir "/workspaces/$workspace_basename" "$container_id" true > /dev/null 2>&1 || return 1
+  # Use `devcontainer exec` itself as the probe. With
+  # --mount-git-worktree-common-dir the in-container workspace path is
+  # computed from the git worktree common dir layout (e.g.
+  # /workspaces/.worktrees/issue-1, not /workspaces/issue-1), which
+  # makes manual path reconstruction brittle. Delegate workspace
+  # resolution to the CLI and just confirm that it can open a file
+  # handle in the workspace (`ls .` would fail with the same "current
+  # working directory is outside of container mount namespace root"
+  # error as a broken bind mount).
+  devcontainer exec --workspace-folder "$WORKTREE_PATH" \
+    --mount-git-worktree-common-dir \
+    -- sh -c 'ls . > /dev/null' > /dev/null 2>&1 || return 1
 }
 
 CONTAINER_ID="$(get_container_id)"

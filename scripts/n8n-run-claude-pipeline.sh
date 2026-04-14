@@ -76,8 +76,15 @@ echo "worktree: $WORKTREE_PATH" >&2
 
 # dc_exec: run a command inside the devcontainer with required env vars.
 # Usage: dc_exec <cmd> [args...]
+#
+# `--mount-git-worktree-common-dir` is required so `git` commands run
+# inside the container can resolve the worktree's gitdir reference.
+# The worktree must have been created with `git worktree add --relative-paths`
+# (see create-worktree.sh); otherwise this flag is a no-op and git
+# operations will fail with "fatal: not a git repository".
 dc_exec() {
   devcontainer exec --workspace-folder "$WORKTREE_PATH" \
+    --mount-git-worktree-common-dir \
     --remote-env "CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN" \
     --remote-env "GH_TOKEN=$GH_TOKEN" \
     -- "$@"
