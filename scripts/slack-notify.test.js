@@ -371,6 +371,43 @@ test('buildFailureMessage: error 未指定時はタイムアウト扱い', () =>
   assert.match(section.text.text, /タイムアウト/);
 });
 
+test('buildFailureMessage: エラー本文をコードフェンスで囲む', () => {
+  const msg = buildFailureMessage({
+    ...COMMON,
+    threadTs: '0',
+    error: 'Command failed\nLine 2\nLine 3',
+    executionUrl: 'http://localhost:5678/execution/xxx',
+  });
+  const section = findBlock(msg, 'section');
+  // 先頭と末尾にそれぞれ ``` がある
+  assert.match(section.text.text, /^```\n/);
+  assert.match(section.text.text, /\n```\n/);
+  // 改行が保持されている
+  assert.match(section.text.text, /Command failed\nLine 2\nLine 3/);
+  // リトライ案内はコードフェンス外(下)に残る
+  const afterFence = section.text.text.split(/\n```\n/)[1];
+  assert.match(afterFence, /ai-ready.*再付与/);
+});
+
+test('buildFailureMessage: エラー本文の ``` はフェンスを壊さずエスケープされる', () => {
+  const msg = buildFailureMessage({
+    ...COMMON,
+    threadTs: '0',
+    error: 'stderr dump:\n```\nnested fence\n```\nend',
+    executionUrl: 'http://localhost:5678/execution/xxx',
+  });
+  const section = findBlock(msg, 'section');
+  // 行頭の ``` は外側フェンスの開始と終了の 2 箇所だけ。入れ子の ```
+  // はエスケープ(zero-width space 混入)されて行頭に 3 連続の backtick
+  // として残らないことを確認する
+  const fenceLineCount = (section.text.text.match(/^```\n/gm) || []).length;
+  assert.equal(fenceLineCount, 2, '外側フェンスの開始と終了の 2 本のみ');
+  // 入れ子の ``` がそのまま閉じとして作用していないこと
+  assert.doesNotMatch(section.text.text, /\n```\nnested fence\n```\n/);
+  // 元の文字情報は保持されている
+  assert.match(section.text.text, /nested fence/);
+});
+
 // ─── buildStuckMessage ───────────────────────────────────────────
 
 test('buildStuckMessage: 基本構造と Issue ボタン', () => {

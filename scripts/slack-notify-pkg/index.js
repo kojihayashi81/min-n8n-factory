@@ -215,7 +215,13 @@ function buildFailureMessage({
   executionStartedAt,
 }) {
   const issueUrl = `https://github.com/${repo}/issues/${issueNumber}`;
-  const errorText = (error || 'タイムアウト').substring(0, FAILURE_ERROR_MAX);
+  // Error body is rendered inside a Slack mrkdwn code fence for
+  // readability (preserves newlines, indentation, and escapes most
+  // mrkdwn specials). Replace any literal ``` in the payload with a
+  // zero-width-space-separated sequence so the fence can't be closed
+  // prematurely by stray backticks in the captured error output.
+  const rawErrorText = (error || 'タイムアウト').substring(0, FAILURE_ERROR_MAX);
+  const errorText = rawErrorText.replace(/```/g, '`\u200B`\u200B`');
   const elapsed = elapsedSinceStart(executionStartedAt);
   const min = Math.floor(elapsed / 60);
   const sec = String(elapsed % 60).padStart(2, '0');
@@ -228,7 +234,7 @@ function buildFailureMessage({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `• ${errorText}\n• 👉 Issue に \`ai-ready\` ラベルを再付与してリトライしてください`,
+          text: `\`\`\`\n${errorText}\n\`\`\`\n👉 Issue に \`ai-ready\` ラベルを再付与してリトライしてください`,
         },
       },
       {
