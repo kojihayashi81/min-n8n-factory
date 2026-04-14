@@ -591,6 +591,37 @@ test('elapsedSinceStart: 無効な入力は 0', () => {
   assert.equal(elapsedSinceStart('not-a-date'), 0);
 });
 
+test('elapsedSinceStart: ネイティブ Date オブジェクトを受け付ける', () => {
+  const start = new Date(Date.now() - 45 * 1000);
+  const elapsed = elapsedSinceStart(start);
+  assert.ok(elapsed >= 45 && elapsed <= 47);
+});
+
+test('elapsedSinceStart: Luxon 風 DateTime (toMillis を持つオブジェクト) を受け付ける', () => {
+  const targetMs = Date.now() - 73 * 1000;
+  const luxonLike = {
+    toMillis() {
+      return targetMs;
+    },
+    toISO() {
+      return new Date(targetMs).toISOString();
+    },
+  };
+  const elapsed = elapsedSinceStart(luxonLike);
+  assert.ok(elapsed >= 73 && elapsed <= 75);
+});
+
+test('elapsedSinceStart: toMillis がなく toISO のみでも解釈できる', () => {
+  const targetMs = Date.now() - 91 * 1000;
+  const luxonIsoOnly = {
+    toISO() {
+      return new Date(targetMs).toISOString();
+    },
+  };
+  const elapsed = elapsedSinceStart(luxonIsoOnly);
+  assert.ok(elapsed >= 91 && elapsed <= 93);
+});
+
 // ─── extractPrUrl ────────────────────────────────────────────────
 
 test('extractPrUrl: stdout から PR URL を抽出', () => {

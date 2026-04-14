@@ -60,16 +60,34 @@ function extractPrNumber(prUrl) {
   return match ? match[1] : '—';
 }
 
-// Seconds elapsed since the given start timestamp. Accepts either an
-// ISO-8601 string (our unit tests use this shape) or a Date object
-// (what n8n's `$execution.startedAt` hands us in Code nodes — passing
-// the raw Date through `Date.parse` yields NaN and would collapse the
-// elapsed display to "0分00秒"). Falls back to 0 when the input is
-// missing or unparseable so the builders stay pure and crash-free.
+// Seconds elapsed since the given start timestamp. Accepts three
+// different shapes because the call sites use different date types:
+//
+// - ISO-8601 string: our unit tests pass these directly.
+// - JavaScript Date: pre-Luxon n8n versions and other callers.
+// - Luxon DateTime: what n8n's Code nodes actually receive via
+//   `$execution.startedAt` and friends. Luxon DateTime is NOT an
+//   `instanceof Date`, and `new Date(luxonDT)` relies on the
+//   object's `toString()` which may or may not round-trip cleanly
+//   across locales, so detect the duck-typed `toMillis` / `toISO`
+//   methods explicitly before falling back to Date coercion.
+//
+// Falls back to 0 when the input is missing or unparseable so the
+// builders stay pure and crash-free.
 function elapsedSinceStart(startedAt) {
   if (!startedAt) return 0;
-  const startMs =
-    startedAt instanceof Date ? startedAt.getTime() : new Date(startedAt).getTime();
+  let startMs;
+  if (startedAt instanceof Date) {
+    startMs = startedAt.getTime();
+  } else if (typeof startedAt === 'object' && typeof startedAt.toMillis === 'function') {
+    // Luxon DateTime (n8n's $execution.startedAt etc.)
+    startMs = startedAt.toMillis();
+  } else if (typeof startedAt === 'object' && typeof startedAt.toISO === 'function') {
+    // Luxon fallback path for older versions that do not expose toMillis.
+    startMs = new Date(startedAt.toISO()).getTime();
+  } else {
+    startMs = new Date(startedAt).getTime();
+  }
   if (Number.isNaN(startMs)) return 0;
   const diff = Math.floor((Date.now() - startMs) / 1000);
   return diff < 0 ? 0 : diff;
