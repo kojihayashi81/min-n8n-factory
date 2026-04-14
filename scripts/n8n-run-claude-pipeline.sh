@@ -411,7 +411,7 @@ fi
 # ─── Commit + push + PR ──────────────────────────────────────────
 
 set +e
-dc_exec bash -c "cd '$WORKTREE_PATH' && git add '$NOTE_REL_PATH' && git commit -m 'investigate: add investigation note for issue #${ISSUE_NUMBER}'" \
+dc_exec bash -c "git add '$NOTE_REL_PATH' && git commit -m 'investigate: add investigation note for issue #${ISSUE_NUMBER}'" \
   >"$WORK_DIR/git-commit.stdout" 2>"$WORK_DIR/git-commit.stderr"
 commit_exit=$?
 set -e
@@ -420,7 +420,7 @@ if [ "$commit_exit" -ne 0 ]; then
 fi
 
 set +e
-dc_exec bash -c "cd '$WORKTREE_PATH' && git push -u origin '$BRANCH'" \
+dc_exec bash -c "git push -u origin '$BRANCH'" \
   >"$WORK_DIR/git-push.stdout" 2>"$WORK_DIR/git-push.stderr"
 push_exit=$?
 set -e

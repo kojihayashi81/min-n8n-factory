@@ -34,3 +34,7 @@ services:
       - ${PROJECT_PATH}:${PROJECT_PATH}
       - ./scripts:/opt/scripts:ro
       - ./scripts/slack-notify-pkg:/opt/n8n-user-modules/node_modules/slack-notify:ro
+      # Pipeline agent prompts. n8n-run-claude-pipeline.sh resolves
+      # $SCRIPT_DIR/../prompts/agents → /opt/prompts/agents by default,
+      # so this mount must exist for the pipeline to start.
+      - ./prompts:/opt/prompts:ro
