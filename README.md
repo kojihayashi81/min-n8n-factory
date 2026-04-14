@@ -88,7 +88,8 @@ npm install
 ステージされたファイルに対して lint-staged が以下を実行する:
 
 - `*.md` — `markdownlint --fix` と `prettier --write`（自動修正はコミットに含まれる）
-- `*.{js,ts,json,yml,yaml}` — `prettier --write`
+- `*.{js,ts}` — `eslint --fix` と `prettier --write`（自動修正できない違反はコミットをブロックする）
+- `*.{json,yml,yaml}` — `prettier --write`
 - `scripts/**` に変更があれば `npm run test:scripts`
 - `mcp-server/src/**` に変更があれば `npm run test:mcp`
 
@@ -98,7 +99,7 @@ npm install
 
 プッシュ直前に以下を実行する:
 
-- `npm run lint` — `markdownlint` と `prettier --check`（Git 追跡ファイル全体のフォーマット検証）
+- `npm run lint` — `markdownlint` → `eslint` → `prettier --check` の順（Git 追跡ファイル全体の静的解析とフォーマット検証）
 - `npm test` — `scripts/` と `mcp-server/` 両方の全テスト
 
 いずれかが失敗するとプッシュはブロックされる。

@@ -11,6 +11,11 @@ export default (stagedFiles) => {
     tasks.push(`prettier --write ${mdFiles.map((f) => `"${f}"`).join(' ')}`);
   }
 
+  const jsTsFiles = stagedFiles.filter((f) => /\.(js|ts)$/.test(f));
+  if (jsTsFiles.length) {
+    tasks.push(`eslint --fix ${jsTsFiles.map((f) => `"${f}"`).join(' ')}`);
+  }
+
   const fmtFiles = stagedFiles.filter((f) => /\.(js|ts|json|yml|yaml)$/.test(f));
   if (fmtFiles.length) {
     tasks.push(`prettier --write ${fmtFiles.map((f) => `"${f}"`).join(' ')}`);
