@@ -60,12 +60,34 @@ function extractPrNumber(prUrl) {
   return match ? match[1] : '—';
 }
 
-// Seconds elapsed since the given ISO-8601 timestamp (what n8n's
-// $execution.startedAt returns). Falls back to 0 when the input is
-// missing or unparseable so the builders stay pure and crash-free.
+// Seconds elapsed since the given start timestamp. Accepts three
+// different shapes because the call sites use different date types:
+//
+// - ISO-8601 string: our unit tests pass these directly.
+// - JavaScript Date: pre-Luxon n8n versions and other callers.
+// - Luxon DateTime: what n8n's Code nodes actually receive via
+//   `$execution.startedAt` and friends. Luxon DateTime is NOT an
+//   `instanceof Date`, and `new Date(luxonDT)` relies on the
+//   object's `toString()` which may or may not round-trip cleanly
+//   across locales, so detect the duck-typed `toMillis` / `toISO`
+//   methods explicitly before falling back to Date coercion.
+//
+// Falls back to 0 when the input is missing or unparseable so the
+// builders stay pure and crash-free.
 function elapsedSinceStart(startedAt) {
   if (!startedAt) return 0;
-  const startMs = Date.parse(startedAt);
+  let startMs;
+  if (startedAt instanceof Date) {
+    startMs = startedAt.getTime();
+  } else if (typeof startedAt === 'object' && typeof startedAt.toMillis === 'function') {
+    // Luxon DateTime (n8n's $execution.startedAt etc.)
+    startMs = startedAt.toMillis();
+  } else if (typeof startedAt === 'object' && typeof startedAt.toISO === 'function') {
+    // Luxon fallback path for older versions that do not expose toMillis.
+    startMs = new Date(startedAt.toISO()).getTime();
+  } else {
+    startMs = new Date(startedAt).getTime();
+  }
   if (Number.isNaN(startMs)) return 0;
   const diff = Math.floor((Date.now() - startMs) / 1000);
   return diff < 0 ? 0 : diff;
@@ -119,6 +141,10 @@ function buildSuccessMessage({
   threadTs,
   prUrl,
   executionStartedAt,
+  qualityScore,
+  qualityScoreMax,
+  qualityScoreRerun,
+  webSkipReason,
 }) {
   const issueUrl = `https://github.com/${repo}/issues/${issueNumber}`;
   const hasPr = Boolean(prUrl) && extractPrNumber(prUrl) !== '—';
@@ -130,9 +156,16 @@ function buildSuccessMessage({
   // Section body adapts: if the PR URL is missing we don't want to
   // mislead the reader with a "Draft PR を作成しました" line or a
   // "PR #—" button that dead-ends at the repo /pulls page.
-  const sectionText = hasPr
+  const baseSectionText = hasPr
     ? '調査が完了し、Draft PR を作成しました。'
     : '調査が完了しました。PR URL を stdout から検出できなかったため、リポジトリの Pull requests 一覧を確認してください。';
+  const scoreLine = formatQualityScoreLine(
+    qualityScore,
+    qualityScoreMax,
+    qualityScoreRerun,
+    webSkipReason
+  );
+  const sectionText = scoreLine ? `${baseSectionText}\n${scoreLine}` : baseSectionText;
   const contextText = hasPr
     ? `${repo} | issues/${issueNumber} → PR #${prNum} | ⏱️ ${min}分${sec}秒`
     : `${repo} | issues/${issueNumber} | ⏱️ ${min}分${sec}秒`;
@@ -166,6 +199,33 @@ function buildSuccessMessage({
   return msg;
 }
 
+// Render the Gatekeeper quality score line attached to the Slack success
+// section. Returns null when no score is available (backward compatible
+// with the legacy single-shot invocation that has no Gatekeeper).
+function formatQualityScoreLine(score, max, rerunScore, webSkipReason) {
+  if (typeof score !== 'number') return null;
+  const safeMax = typeof max === 'number' && max > 0 ? max : 100;
+  // 80 点満点は Web 調査失敗/スキップ時のみ。通常ケースと混ざると「なぜ 80？」と
+  // なりやすいので本文に明示する。skip 理由（検索ヒントなし / Web 調査失敗）も
+  // 併記してレビュー時に 80 点満点の根拠が追えるようにする。
+  const reasonLabel =
+    webSkipReason === 'no_hints'
+      ? '検索ヒントなし'
+      : webSkipReason === 'web_failed'
+        ? 'Web 調査失敗'
+        : null;
+  const scaleNote =
+    safeMax === 80
+      ? reasonLabel
+        ? `（Web 調査スキップ: ${reasonLabel}、80 点満点換算）`
+        : '（Web 調査スキップ、80 点満点換算）'
+      : '';
+  if (typeof rerunScore === 'number') {
+    return `品質スコア: 初回 ${score} / ${safeMax} → 再実行後 ${rerunScore} / ${safeMax}${scaleNote}`;
+  }
+  return `品質スコア: ${score} / ${safeMax}${scaleNote}`;
+}
+
 function buildFailureMessage({
   repo,
   issueNumber,
@@ -177,7 +237,13 @@ function buildFailureMessage({
   executionStartedAt,
 }) {
   const issueUrl = `https://github.com/${repo}/issues/${issueNumber}`;
-  const errorText = (error || 'タイムアウト').substring(0, FAILURE_ERROR_MAX);
+  // Error body is rendered inside a Slack mrkdwn code fence for
+  // readability (preserves newlines, indentation, and escapes most
+  // mrkdwn specials). Replace any literal ``` in the payload with a
+  // zero-width-space-separated sequence so the fence can't be closed
+  // prematurely by stray backticks in the captured error output.
+  const rawErrorText = (error || 'タイムアウト').substring(0, FAILURE_ERROR_MAX);
+  const errorText = rawErrorText.replace(/```/g, '`\u200B`\u200B`');
   const elapsed = elapsedSinceStart(executionStartedAt);
   const min = Math.floor(elapsed / 60);
   const sec = String(elapsed % 60).padStart(2, '0');
@@ -190,7 +256,7 @@ function buildFailureMessage({
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `• ${errorText}\n• 👉 Issue に \`ai-ready\` ラベルを再付与してリトライしてください`,
+          text: `\`\`\`\n${errorText}\n\`\`\`\n👉 Issue に \`ai-ready\` ラベルを再付与してリトライしてください`,
         },
       },
       {
@@ -307,13 +373,56 @@ function buildStuckMessage({ repo, issueNumber, issueTitle, channelId, updatedAt
 // stay as 3-line adapters.
 
 const PR_URL_PATTERN = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/;
-const DEFAULT_CLAUDE_TIMEOUT_SEC = '600';
-const DEFAULT_STUCK_THRESHOLD_SEC = '1200';
+const DEFAULT_CLAUDE_TIMEOUT_SEC = '1020';
+const DEFAULT_STUCK_THRESHOLD_SEC = '1800';
+
+// Gatekeeper outputs its score by printing a sentinel line to stdout
+// from n8n-run-claude-pipeline.sh. The rerun variant is emitted only
+// when the Synthesizer was rerun and Gatekeeper was run a second time
+// for notification purposes (no threshold judgment).
+//
+// Line format (one per line, anywhere in stdout):
+//   QUALITY_SCORE=75/100
+//   QUALITY_SCORE_RERUN=85/100
+//   WEB_SKIP_REASON=no_hints     (only when Web Investigator was skipped)
+//   WEB_SKIP_REASON=web_failed
+const QUALITY_SCORE_PATTERN = /^QUALITY_SCORE=(\d+)\/(\d+)$/m;
+const QUALITY_SCORE_RERUN_PATTERN = /^QUALITY_SCORE_RERUN=(\d+)\/(\d+)$/m;
+const WEB_SKIP_REASON_PATTERN = /^WEB_SKIP_REASON=(no_hints|web_failed)$/m;
 
 function extractPrUrl(stdout) {
   if (stdout === undefined || stdout === null) return null;
   const match = stdout.toString().match(PR_URL_PATTERN);
   return match ? match[0] : null;
+}
+
+// Extract the Gatekeeper initial quality score from pipeline stdout.
+// Returns `{ score, max }` or null when the sentinel is absent.
+function extractQualityScore(stdout) {
+  if (stdout === undefined || stdout === null) return null;
+  const match = stdout.toString().match(QUALITY_SCORE_PATTERN);
+  if (!match) return null;
+  return { score: Number(match[1]), max: Number(match[2]) };
+}
+
+// Extract the Gatekeeper rerun (2nd pass) quality score from pipeline
+// stdout. Only present when the Synthesizer was rerun. Returns
+// `{ score, max }` or null.
+function extractQualityScoreRerun(stdout) {
+  if (stdout === undefined || stdout === null) return null;
+  const match = stdout.toString().match(QUALITY_SCORE_RERUN_PATTERN);
+  if (!match) return null;
+  return { score: Number(match[1]), max: Number(match[2]) };
+}
+
+// Extract the Web Investigator skip reason from pipeline stdout.
+// Returns "no_hints" (Code Investigator produced no search_hints),
+// "web_failed" (Web Investigator errored or returned invalid JSON),
+// or null when Web investigation ran normally.
+function extractWebSkipReason(stdout) {
+  if (stdout === undefined || stdout === null) return null;
+  const match = stdout.toString().match(WEB_SKIP_REASON_PATTERN);
+  return match ? match[1] : null;
 }
 
 function resolveFailureError(runClaudeOutput, timeoutSec) {
@@ -346,24 +455,37 @@ const STRATEGIES = {
     }),
     replyBroadcast: false,
   }),
-  success: ({ issue, env, threadTs, runClaudeOutput, executionStartedAt }) => ({
-    // Pass the raw extractPrUrl result through — null signals "PR not
-    // found" to buildSuccessMessage, which suppresses the PR button and
-    // softens the section text. The old "/pulls" fallback rendered as
-    // "PR #—" in Slack, which looked broken.
-    message: buildSuccessMessage({
-      repo: env.GITHUB_REPO,
-      issueNumber: issue.number,
-      issueTitle: issue.title,
-      channelId: env.SLACK_CHANNEL_ID,
-      threadTs,
-      prUrl: extractPrUrl(runClaudeOutput && runClaudeOutput.stdout),
-      executionStartedAt,
-    }),
-    // Broadcast back to the main channel so people see the final result
-    // even if they weren't watching the Issue's thread.
-    replyBroadcast: true,
-  }),
+  success: ({ issue, env, threadTs, runClaudeOutput, executionStartedAt }) => {
+    const stdout = runClaudeOutput && runClaudeOutput.stdout;
+    const initialScore = extractQualityScore(stdout);
+    const rerunScore = extractQualityScoreRerun(stdout);
+    const webSkipReason = extractWebSkipReason(stdout);
+    return {
+      // Pass the raw extractPrUrl result through — null signals "PR not
+      // found" to buildSuccessMessage, which suppresses the PR button and
+      // softens the section text. The old "/pulls" fallback rendered as
+      // "PR #—" in Slack, which looked broken.
+      message: buildSuccessMessage({
+        repo: env.GITHUB_REPO,
+        issueNumber: issue.number,
+        issueTitle: issue.title,
+        channelId: env.SLACK_CHANNEL_ID,
+        threadTs,
+        prUrl: extractPrUrl(stdout),
+        executionStartedAt,
+        // Gatekeeper score fields are null when Gatekeeper was skipped or
+        // its stdout sentinel is absent — buildSuccessMessage then falls
+        // back to the pre-pipeline behavior of no score line.
+        qualityScore: initialScore ? initialScore.score : null,
+        qualityScoreMax: initialScore ? initialScore.max : null,
+        qualityScoreRerun: rerunScore ? rerunScore.score : null,
+        webSkipReason,
+      }),
+      // Broadcast back to the main channel so people see the final result
+      // even if they weren't watching the Issue's thread.
+      replyBroadcast: true,
+    };
+  },
   failure: ({ issue, env, threadTs, runClaudeOutput, executionUrl, executionStartedAt }) => {
     const errorText = resolveFailureError(
       runClaudeOutput,
@@ -463,6 +585,9 @@ module.exports = {
   buildPayloadForContext,
   extractPrUrl,
   extractPrNumber,
+  extractQualityScore,
+  extractQualityScoreRerun,
+  extractWebSkipReason,
   elapsedSinceStart,
   resolveFailureError,
   scrubSecrets,

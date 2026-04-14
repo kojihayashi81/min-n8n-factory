@@ -13,24 +13,30 @@ services:
       - GENERIC_TIMEZONE=Asia/Tokyo
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=7
-      - EXECUTIONS_TIMEOUT=${WORKFLOW_TIMEOUT_SEC:-780}
+      - EXECUTIONS_TIMEOUT=${WORKFLOW_TIMEOUT_SEC:-1200}
       - GITHUB_REPO=${GITHUB_REPO}
       - PROJECT_PATH=${PROJECT_PATH}
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}
       - GH_TOKEN=${GH_TOKEN}
-      - CLAUDE_TIMEOUT_SEC=${CLAUDE_TIMEOUT_SEC:-600}
-      - WORKFLOW_TIMEOUT_SEC=${WORKFLOW_TIMEOUT_SEC:-780}
-      - STUCK_THRESHOLD_SEC=${STUCK_THRESHOLD_SEC:-1200}
+      - CLAUDE_TIMEOUT_SEC=${CLAUDE_TIMEOUT_SEC:-1020}
+      - WORKFLOW_TIMEOUT_SEC=${WORKFLOW_TIMEOUT_SEC:-1200}
+      - STUCK_THRESHOLD_SEC=${STUCK_THRESHOLD_SEC:-1800}
       - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
       - EXECUTION_LOG_BASE_URL=${EXECUTION_LOG_BASE_URL:-http://localhost:5678}
       - NODE_FUNCTION_ALLOW_EXTERNAL=slack-notify
-      # Resolve `require('slack-notify')` without coupling to n8n's
-      # internal node_modules layout. /opt/n8n-user-modules is a
-      # project-owned NODE_PATH prefix that survives n8n upgrades.
-      - NODE_PATH=/opt/n8n-user-modules/node_modules
     volumes:
       - ./data/n8n:/home/node/.n8n
       - /var/run/docker.sock:/var/run/docker.sock
       - ${PROJECT_PATH}:${PROJECT_PATH}
       - ./scripts:/opt/scripts:ro
-      - ./scripts/slack-notify-pkg:/opt/n8n-user-modules/node_modules/slack-notify:ro
+      # n8n の Code ノード (vm2) の require 解決は NODE_PATH を参照せず、
+      # sandbox ファイル (n8n-nodes-base/.../Code) の __dirname から
+      # 親ディレクトリを walk up しながら node_modules/<name> を探す方式。
+      # そのため vm2 の walk up 経路に含まれる /usr/local/lib/node_modules/n8n/node_modules/
+      # に直接マウントする必要がある。`NODE_FUNCTION_ALLOW_EXTERNAL=slack-notify`
+      # で Code ノードサンドボックスからの require を許可している。
+      - ./scripts/slack-notify-pkg:/usr/local/lib/node_modules/n8n/node_modules/slack-notify:ro
+      # Pipeline agent prompts. n8n-run-claude-pipeline.sh resolves
+      # $SCRIPT_DIR/../prompts/agents → /opt/prompts/agents by default,
+      # so this mount must exist for the pipeline to start.
+      - ./prompts:/opt/prompts:ro

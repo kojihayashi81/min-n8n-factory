@@ -12,9 +12,9 @@
 
 ## スタック判定のしきい値
 
-`STUCK_THRESHOLD_SEC`（デフォルト: 1200秒 = 20分）。
+`STUCK_THRESHOLD_SEC`（デフォルト: 1800秒 = 30分）。
 
-AI Issue Processor のワークフロー実行上限 `WORKFLOW_TIMEOUT_SEC`（デフォルト 780秒）よりも広めに取る。同値にしてしまうと「ギリギリ正常終了した Issue がスタック扱いされる」境界競合が起きるため、明示的に別 env として分離している。値の管理は `.env` の `STUCK_THRESHOLD_SEC` に集約されており、docker-compose.yml 経由で n8n コンテナに渡される。`Build stuck-batch payload` から呼ばれる `buildPayloadForContext({ kind: 'stuck-batch', env })` も同じ変数を参照するため、通知本文の「⏰ 1200秒以上経過」表示としきい値が常に一致する。
+AI Issue Processor のワークフロー実行上限 `WORKFLOW_TIMEOUT_SEC`（デフォルト 1200秒）よりも広めに取る。同値にしてしまうと「ギリギリ正常終了した Issue がスタック扱いされる」境界競合が起きるため、明示的に別 env として分離している。値の管理は `.env` の `STUCK_THRESHOLD_SEC` に集約されており、docker-compose.yml 経由で n8n コンテナに渡される。`Build stuck-batch payload` から呼ばれる `buildPayloadForContext({ kind: 'stuck-batch', env })` も同じ変数を参照するため、通知本文の「⏰ 1800秒以上経過」表示としきい値が常に一致する。
 
 ## フロー
 

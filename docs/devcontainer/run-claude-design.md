@@ -105,7 +105,7 @@ claude --print --allowedTools "Read,Grep,Glob,Bash(git *),Bash(gh *),Bash(cat *)
   "/investigate <issue-number>"
 ```
 
-スキルの `allowed-tools` を変更した場合は、n8n スクリプト（`scripts/n8n-run-claude.sh`）の `--allowedTools` も合わせて更新すること。
+スキルの `allowed-tools` を変更した場合は、n8n スクリプト（`scripts/n8n-run-claude-pipeline.sh`）の各エージェントの `--allowedTools` や、`prompts/agents/*.md` に記載された許可ツールも合わせて更新すること。
 
 ### 3.1. 失敗時の stdout / stderr ハンドリング（課題 #7 への回答）
 
