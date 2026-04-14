@@ -1,6 +1,6 @@
 # AI Issue Processor アーキテクチャ
 
-本ドキュメントは `ai-issue-processor` ワークフローの全体像と、DevContainer + Worktree + 4 段エージェントパイプラインという構成を採った理由をまとめる。n8n 側のノード構成・失敗通知・タイムアウト設計などの詳細は [docs/workflows/ai-issue-processor/](../workflows/ai-issue-processor/) 配下を参照。
+本ドキュメントは `ai-issue-processor` ワークフローの全体像と、DevContainer + Worktree + 4 段エージェントパイプラインという構成を採った理由をまとめる。目次は [README.md](./README.md)、n8n 側のノード構成・失敗通知・タイムアウト設計などの詳細は兄弟ドキュメント（[flow.md](./flow.md) / [slack.md](./slack.md) / [agent_pipeline.md](./agent_pipeline.md)）を参照。
 
 ## 全体フロー
 
@@ -175,7 +175,7 @@ claude setup-token
 CLAUDE_CODE_OAUTH_TOKEN=<生成されたトークン>
 ```
 
-> 詳細な検討経緯は [run-claude-design.md](run-claude-design.md) を参照。
+> 詳細な検討経緯は [run-claude-design.md](../../devcontainer/run-claude-design.md) を参照。
 
 ### GitHub
 
@@ -205,15 +205,19 @@ Schedule 10min
   → Slack: 処理失敗（スレッド返信 + reply_broadcast=true）
 ```
 
-- ノードの役割一覧は [workflows/ai-issue-processor/flow.md](../workflows/ai-issue-processor/flow.md)
-- Slack 通知の設計は [workflows/ai-issue-processor/slack.md](../workflows/ai-issue-processor/slack.md)
-- 4 段パイプラインの JSON スキーマ / 採点基準 / 再実行ポリシー / コスト構造は [workflows/ai-issue-processor/agent_pipeline.md](../workflows/ai-issue-processor/agent_pipeline.md)
+- ノードの役割一覧は [flow.md](./flow.md)
+- Slack 通知の設計は [slack.md](./slack.md)
+- 4 段パイプラインの JSON スキーマ / 採点基準 / 再実行ポリシー / コスト構造は [agent_pipeline.md](./agent_pipeline.md)
 
 ---
 
 ## 関連ドキュメント
 
-- [env-flow.md](env-flow.md) — 環境変数とトークンフロー、docker-compose.yml のマウント / 環境変数、パス規約の不変条件
-- [run-claude-design.md](run-claude-design.md) — `claude --print` 実行方式の検討経緯と失敗モード
-- [setup-devcontainer.md](setup-devcontainer.md) — 対象リポジトリへの DevContainer 配布手順
-- [references.md](references.md) — 外部参考リンク集
+- [README.md](./README.md) — このワークフローの目次
+- [flow.md](./flow.md) — 実行フロー全体図、n8n ノードの役割表、タイムアウトとリトライ
+- [slack.md](./slack.md) — Slack 通知の設計（品質スコア、失敗通知、ts 永続化）
+- [agent_pipeline.md](./agent_pipeline.md) — 4 段エージェントの JSON スキーマ、採点基準、コスト構造
+- [../../devcontainer/env-flow.md](../../devcontainer/env-flow.md) — 環境変数とトークンフロー、docker-compose.yml のマウント / 環境変数、パス規約の不変条件
+- [../../devcontainer/run-claude-design.md](../../devcontainer/run-claude-design.md) — `claude --print` 実行方式の検討経緯と失敗モード
+- [../../devcontainer/setup-devcontainer.md](../../devcontainer/setup-devcontainer.md) — 対象リポジトリへの DevContainer 配布手順
+- [../../devcontainer/references.md](../../devcontainer/references.md) — 外部参考リンク集
