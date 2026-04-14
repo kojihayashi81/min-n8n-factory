@@ -48,7 +48,7 @@
             {
               "id": "condition-stale",
               "leftValue": "={{ Math.floor((Date.now() - new Date($json.updated_at).getTime()) / 1000) }}",
-              "rightValue": "={{ Number($env.STUCK_THRESHOLD_SEC || 1200) }}",
+              "rightValue": "={{ Number($env.STUCK_THRESHOLD_SEC || 1620) }}",
               "operator": {
                 "type": "number",
                 "operation": "gt"

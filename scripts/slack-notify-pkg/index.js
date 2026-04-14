@@ -307,8 +307,8 @@ function buildStuckMessage({ repo, issueNumber, issueTitle, channelId, updatedAt
 // stay as 3-line adapters.
 
 const PR_URL_PATTERN = /https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+/;
-const DEFAULT_CLAUDE_TIMEOUT_SEC = '600';
-const DEFAULT_STUCK_THRESHOLD_SEC = '1200';
+const DEFAULT_CLAUDE_TIMEOUT_SEC = '900';
+const DEFAULT_STUCK_THRESHOLD_SEC = '1620';
 
 function extractPrUrl(stdout) {
   if (stdout === undefined || stdout === null) return null;
