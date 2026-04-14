@@ -74,6 +74,16 @@ echo "worktree: $WORKTREE_PATH" >&2
 
 # ─── Helpers ─────────────────────────────────────────────────────
 
+# Default git author for commits produced by the pipeline. The
+# devcontainer has no pre-configured git user.name / user.email, so
+# `git commit` would abort with "Author identity unknown". Surface a
+# stable bot identity via GIT_AUTHOR_* / GIT_COMMITTER_* env vars
+# (overridable from the host .env if the user wants a different name).
+GIT_AUTHOR_NAME="${GIT_AUTHOR_NAME:-min-factory bot}"
+GIT_AUTHOR_EMAIL="${GIT_AUTHOR_EMAIL:-min-factory-bot@users.noreply.github.com}"
+GIT_COMMITTER_NAME="${GIT_COMMITTER_NAME:-$GIT_AUTHOR_NAME}"
+GIT_COMMITTER_EMAIL="${GIT_COMMITTER_EMAIL:-$GIT_AUTHOR_EMAIL}"
+
 # dc_exec: run a command inside the devcontainer with required env vars.
 # Usage: dc_exec <cmd> [args...]
 #
@@ -87,6 +97,10 @@ dc_exec() {
     --mount-git-worktree-common-dir \
     --remote-env "CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN" \
     --remote-env "GH_TOKEN=$GH_TOKEN" \
+    --remote-env "GIT_AUTHOR_NAME=$GIT_AUTHOR_NAME" \
+    --remote-env "GIT_AUTHOR_EMAIL=$GIT_AUTHOR_EMAIL" \
+    --remote-env "GIT_COMMITTER_NAME=$GIT_COMMITTER_NAME" \
+    --remote-env "GIT_COMMITTER_EMAIL=$GIT_COMMITTER_EMAIL" \
     -- "$@"
 }
 
@@ -137,8 +151,22 @@ run_agent() {
     claude_args+=(--allowedTools "$allowed_tools")
   fi
 
+  # Busybox's `timeout` cannot invoke shell functions (it only execs
+  # on-disk binaries), so we can't wrap `dc_exec "${claude_args[@]}"`
+  # in it — doing so would return exit=127 "No such file or directory"
+  # before claude even starts. Inline the devcontainer invocation
+  # here so timeout is handed a real executable (devcontainer → node).
   set +e
-  timeout "$timeout_sec" dc_exec "${claude_args[@]}" \
+  timeout "$timeout_sec" devcontainer exec \
+    --workspace-folder "$WORKTREE_PATH" \
+    --mount-git-worktree-common-dir \
+    --remote-env "CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN" \
+    --remote-env "GH_TOKEN=$GH_TOKEN" \
+    --remote-env "GIT_AUTHOR_NAME=$GIT_AUTHOR_NAME" \
+    --remote-env "GIT_AUTHOR_EMAIL=$GIT_AUTHOR_EMAIL" \
+    --remote-env "GIT_COMMITTER_NAME=$GIT_COMMITTER_NAME" \
+    --remote-env "GIT_COMMITTER_EMAIL=$GIT_COMMITTER_EMAIL" \
+    -- "${claude_args[@]}" \
     >"$stdout_file" 2>"$stderr_file"
   local exit_code=$?
   set -e
