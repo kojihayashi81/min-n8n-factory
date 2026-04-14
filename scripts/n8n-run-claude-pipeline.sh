@@ -27,10 +27,16 @@ CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:?Error: CLAUDE_CODE_OAUTH_TOK
 # Individual agent timeouts (seconds). Sum must stay under CLAUDE_TIMEOUT_SEC.
 # Defaults follow the "invariant: individual sum < pipeline total" rule documented
 # in docs/workflows/ai-issue-processor/flow.md.
-CLAUDE_TIMEOUT_SEC="${CLAUDE_TIMEOUT_SEC:-1020}"
+#
+# Web Investigator is inherently variance-heavy (WebSearch 10-30s and
+# WebFetch 5-60s per call, multiplied by the 2-3 turns the prompt expects),
+# so the default budget is set well above the raw prompt estimate to avoid
+# the "web_failed skip" path in normal operation while keeping a cap as a
+# safety net against pathologically slow fetches.
+CLAUDE_TIMEOUT_SEC="${CLAUDE_TIMEOUT_SEC:-1200}"
 AGENT_TIMEOUT_COLLECTOR="${AGENT_TIMEOUT_COLLECTOR:-60}"
 AGENT_TIMEOUT_CODE="${AGENT_TIMEOUT_CODE:-300}"
-AGENT_TIMEOUT_WEB="${AGENT_TIMEOUT_WEB:-120}"
+AGENT_TIMEOUT_WEB="${AGENT_TIMEOUT_WEB:-300}"
 AGENT_TIMEOUT_SYNTHESIZER="${AGENT_TIMEOUT_SYNTHESIZER:-180}"
 AGENT_TIMEOUT_GATEKEEPER="${AGENT_TIMEOUT_GATEKEEPER:-60}"
 AGENT_TIMEOUT_SYNTHESIZER_RERUN="${AGENT_TIMEOUT_SYNTHESIZER_RERUN:-180}"
@@ -460,6 +466,15 @@ $NOTE_CONTENT"
 fi
 
 # ─── Commit + push + PR ──────────────────────────────────────────
+#
+# The whole tail of this pipeline must be idempotent because retries
+# (ai-failed → ai-ready) re-run every agent. Each of the three steps
+# below treats a "nothing to do" state as success so the retry path
+# can pick up the existing Draft PR URL instead of failing:
+#
+#   git commit → exit 1 + "nothing to commit" → OK (note already staged upstream)
+#   git push   → "Everything up-to-date" → native exit 0
+#   gh pr create → already-exists error → look up the existing PR URL instead
 
 set +e
 dc_exec bash -c "git add '$NOTE_REL_PATH' && git commit -m 'investigate: add investigation note for issue #${ISSUE_NUMBER}'" \
@@ -467,7 +482,12 @@ dc_exec bash -c "git add '$NOTE_REL_PATH' && git commit -m 'investigate: add inv
 commit_exit=$?
 set -e
 if [ "$commit_exit" -ne 0 ]; then
-  emit_failure git-commit "$commit_exit" "git add/commit exit=$commit_exit (possibly no-op commit or staging failure)"
+  if grep -qE "nothing to commit|no changes added to commit" \
+    "$WORK_DIR/git-commit.stdout" "$WORK_DIR/git-commit.stderr" 2>/dev/null; then
+    echo "=== git commit: no changes (note already on branch); continuing ===" >&2
+  else
+    emit_failure git-commit "$commit_exit" "git add/commit exit=$commit_exit (possibly no-op commit or staging failure)"
+  fi
 fi
 
 set +e
@@ -479,24 +499,43 @@ if [ "$push_exit" -ne 0 ]; then
   emit_failure git-push "$push_exit" "git push exit=$push_exit"
 fi
 
+# Reuse an existing open PR on the branch before attempting to create one.
+# gh pr create fails hard with "a pull request for branch \"X\" already exists"
+# when retried, which would bubble up as a pipeline failure even though the
+# desired end state (a Draft PR exists for the issue) is already satisfied.
 set +e
-dc_exec gh pr create \
-  --draft \
-  --base main \
-  --title "investigate: Issue #${ISSUE_NUMBER} 調査ノート" \
-  --body "Closes #${ISSUE_NUMBER}" \
-  --head "$BRANCH" \
-  >"$WORK_DIR/pr-create.stdout" 2>"$WORK_DIR/pr-create.stderr"
-pr_exit=$?
+dc_exec gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url // empty' \
+  >"$WORK_DIR/pr-existing.stdout" 2>"$WORK_DIR/pr-existing.stderr"
+list_exit=$?
 set -e
-
-if [ "$pr_exit" -ne 0 ]; then
-  emit_failure pr-create "$pr_exit" "gh pr create exit=$pr_exit"
+EXISTING_PR_URL=""
+if [ "$list_exit" -eq 0 ]; then
+  EXISTING_PR_URL=$(tr -d '\r\n' <"$WORK_DIR/pr-existing.stdout")
 fi
 
-PR_URL=$(grep -Eo 'https://github\.com/[^[:space:]]+/pull/[0-9]+' "$WORK_DIR/pr-create.stdout" | tail -1)
-if [ -z "$PR_URL" ]; then
-  emit_failure pr-create 12 "gh pr create succeeded but no PR URL found in stdout"
+if [ -n "$EXISTING_PR_URL" ]; then
+  echo "=== pr-create: reusing existing Draft PR $EXISTING_PR_URL ===" >&2
+  PR_URL="$EXISTING_PR_URL"
+else
+  set +e
+  dc_exec gh pr create \
+    --draft \
+    --base main \
+    --title "investigate: Issue #${ISSUE_NUMBER} 調査ノート" \
+    --body "Closes #${ISSUE_NUMBER}" \
+    --head "$BRANCH" \
+    >"$WORK_DIR/pr-create.stdout" 2>"$WORK_DIR/pr-create.stderr"
+  pr_exit=$?
+  set -e
+
+  if [ "$pr_exit" -ne 0 ]; then
+    emit_failure pr-create "$pr_exit" "gh pr create exit=$pr_exit"
+  fi
+
+  PR_URL=$(grep -Eo 'https://github\.com/[^[:space:]]+/pull/[0-9]+' "$WORK_DIR/pr-create.stdout" | tail -1)
+  if [ -z "$PR_URL" ]; then
+    emit_failure pr-create 12 "gh pr create succeeded but no PR URL found in stdout"
+  fi
 fi
 
 # ─── Emit success output ─────────────────────────────────────────
