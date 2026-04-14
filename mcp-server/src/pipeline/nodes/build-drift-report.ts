@@ -5,14 +5,11 @@ import type {
   WorkflowDef,
   ResourceEntry,
   DriftItem,
-} from "../../lib/types.js";
-import { extractImplLabels } from "./build-labels-lifecycle.js";
+} from '../../lib/types.js';
+import { extractImplLabels } from './build-labels-lifecycle.js';
 
 /** Detect label drift between labels.json and workflow implementation */
-function detectLabelDrift(
-  labelDefs: LabelDef[],
-  workflowDefs: WorkflowDef[]
-): DriftItem[] {
+function detectLabelDrift(labelDefs: LabelDef[], workflowDefs: WorkflowDef[]): DriftItem[] {
   const items: DriftItem[] = [];
 
   const implLabels = extractImplLabels(workflowDefs);
@@ -21,14 +18,11 @@ function detectLabelDrift(
   for (const label of implLabels) {
     if (!specLabels.has(label)) {
       items.push({
-        area: "ラベル定義",
+        area: 'ラベル定義',
         docSays: `labels.json に "${label}" の定義がない`,
         implSays: `ワークフローで "${label}" を使用している`,
-        severity: "warning",
-        sourceFiles: [
-          "labels.json",
-          ...workflowDefs.map((w) => `workflows/${w.fileName}`),
-        ],
+        severity: 'warning',
+        sourceFiles: ['labels.json', ...workflowDefs.map((w) => `workflows/${w.fileName}`)],
       });
     }
   }
@@ -36,11 +30,11 @@ function detectLabelDrift(
   for (const label of specLabels) {
     if (!implLabels.has(label)) {
       items.push({
-        area: "ラベル定義",
+        area: 'ラベル定義',
         docSays: `labels.json に "${label}" が定義されている`,
         implSays: `どのワークフローでも "${label}" を使用していない`,
-        severity: "info",
-        sourceFiles: ["labels.json"],
+        severity: 'info',
+        sourceFiles: ['labels.json'],
       });
     }
   }
@@ -54,21 +48,21 @@ function detectWorkflowTodos(workflowDefs: WorkflowDef[]): DriftItem[] {
   for (const wf of workflowDefs) {
     for (const node of wf.nodes) {
       const cmd = node.parameters.command;
-      if (typeof cmd === "string" && cmd.includes("TODO")) {
+      if (typeof cmd === 'string' && cmd.includes('TODO')) {
         items.push({
-          area: "ワークフロー実装",
+          area: 'ワークフロー実装',
           docSays: `ワークフロー "${wf.name}" は完成済みの想定`,
           implSays: `ノード "${node.name}" の command に TODO が残っている`,
-          severity: "error",
+          severity: 'error',
           sourceFiles: [`workflows/${wf.fileName}`],
         });
       }
-      if (typeof node.notes === "string" && node.notes.includes("TODO")) {
+      if (typeof node.notes === 'string' && node.notes.includes('TODO')) {
         items.push({
-          area: "ワークフロー実装",
+          area: 'ワークフロー実装',
           docSays: `ワークフロー "${wf.name}" は完成済みの想定`,
           implSays: `ノード "${node.name}" の notes に TODO が残っている`,
-          severity: "error",
+          severity: 'error',
           sourceFiles: [`workflows/${wf.fileName}`],
         });
       }
@@ -78,12 +72,9 @@ function detectWorkflowTodos(workflowDefs: WorkflowDef[]): DriftItem[] {
 }
 
 /** Detect make target drift */
-function detectMakeDrift(
-  specDocs: SpecDoc[],
-  makeTargets: MakeTarget[]
-): DriftItem[] {
+function detectMakeDrift(specDocs: SpecDoc[], makeTargets: MakeTarget[]): DriftItem[] {
   const items: DriftItem[] = [];
-  const readme = specDocs.find((d) => d.path === "README.md");
+  const readme = specDocs.find((d) => d.path === 'README.md');
   if (!readme) return items;
 
   const targetNames = new Set(makeTargets.map((t) => t.name));
@@ -94,11 +85,11 @@ function detectMakeDrift(
     const name = match[1];
     if (!targetNames.has(name)) {
       items.push({
-        area: "make コマンド",
+        area: 'make コマンド',
         docSays: `README.md で \`make ${name}\` に言及`,
         implSays: `Makefile にターゲット "${name}" が存在しない`,
-        severity: "warning",
-        sourceFiles: ["README.md", "Makefile"],
+        severity: 'warning',
+        sourceFiles: ['README.md', 'Makefile'],
       });
     }
   }
@@ -106,13 +97,17 @@ function detectMakeDrift(
   // Check for undocumented make targets
   const readmeContent = readme.content;
   for (const target of makeTargets) {
-    if (!new RegExp(`\`make\\s+${target.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\``).test(readmeContent)) {
+    if (
+      !new RegExp(`\`make\\s+${target.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\``).test(
+        readmeContent
+      )
+    ) {
       items.push({
-        area: "make コマンド",
+        area: 'make コマンド',
         docSays: `README.md に \`make ${target.name}\` の記載がない`,
         implSays: `Makefile にターゲット "${target.name}" が存在する`,
-        severity: "info",
-        sourceFiles: ["README.md", "Makefile"],
+        severity: 'info',
+        sourceFiles: ['README.md', 'Makefile'],
       });
     }
   }
@@ -134,41 +129,35 @@ export function buildDriftReport(
     ...detectMakeDrift(specDocs, makeTargets),
   ];
 
-  const errorCount = allItems.filter((i) => i.severity === "error").length;
-  const warningCount = allItems.filter((i) => i.severity === "warning").length;
-  const infoCount = allItems.filter((i) => i.severity === "info").length;
+  const errorCount = allItems.filter((i) => i.severity === 'error').length;
+  const warningCount = allItems.filter((i) => i.severity === 'warning').length;
+  const infoCount = allItems.filter((i) => i.severity === 'info').length;
 
   const sections = allItems.map((item) => {
     const icon =
-      item.severity === "error"
-        ? "[ERROR]"
-        : item.severity === "warning"
-          ? "[WARNING]"
-          : "[INFO]";
+      item.severity === 'error' ? '[ERROR]' : item.severity === 'warning' ? '[WARNING]' : '[INFO]';
     return [
       `### ${icon} ${item.area}`,
-      "",
+      '',
       `- **仕様**: ${item.docSays}`,
       `- **実装**: ${item.implSays}`,
-      `- ソース: ${item.sourceFiles.map((f) => `\`${f}\``).join(", ")}`,
-    ].join("\n");
+      `- ソース: ${item.sourceFiles.map((f) => `\`${f}\``).join(', ')}`,
+    ].join('\n');
   });
 
   const content = [
-    "# ドキュメントと実装の差分レポート",
-    "",
+    '# ドキュメントと実装の差分レポート',
+    '',
     `検出数: ERROR ${errorCount} / WARNING ${warningCount} / INFO ${infoCount}`,
-    "",
+    '',
     ...sections,
-  ].join("\n\n");
+  ].join('\n\n');
 
   const resource: ResourceEntry = {
-    uri: "project://drift-report",
-    title: "ドキュメントと実装の差分レポート",
-    kind: "derived",
-    sourceFiles: [
-      ...new Set(allItems.flatMap((i) => i.sourceFiles)),
-    ],
+    uri: 'project://drift-report',
+    title: 'ドキュメントと実装の差分レポート',
+    kind: 'derived',
+    sourceFiles: [...new Set(allItems.flatMap((i) => i.sourceFiles))],
     summary: `差分候補 ${allItems.length} 件（ERROR ${errorCount} / WARNING ${warningCount} / INFO ${infoCount}）`,
     content,
     knownGaps: [],

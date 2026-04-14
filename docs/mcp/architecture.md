@@ -17,28 +17,28 @@
 
 パイプラインが起動時に生成し、MCP Resources として公開するデータ。
 
-| URI | 種別 | 内容 | ソース |
-| --- | --- | --- | --- |
-| `project://overview` | `spec` | プロジェクト概要 | `README.md` |
-| `project://setup` | `spec` | セットアップ手順 | `docs/setup.md` |
-| `project://skills` | `spec` | Claude Skills 運用方針 | `docs/claude-skills-best-practices.md` |
-| `project://commands/make` | `derived` | make ターゲット一覧と説明 | `Makefile` |
-| `project://labels/lifecycle` | `derived` | Issue ラベルと状態遷移の要約 | `labels.json`, `workflows/*.json` |
-| `project://workflows/ai-issue-processor` | `derived` | 調査フローの説明 | `workflows/ai-issue-processor.json` |
-| `project://workflows/ai-stuck-cleanup` | `derived` | スタック検知と復旧フロー | `workflows/ai-stuck-cleanup.json` |
-| `project://drift-report` | `derived` | 仕様と実装の差分候補一覧 | `docs/`, `Makefile`, `workflows/` |
+| URI                                      | 種別      | 内容                         | ソース                                 |
+| ---------------------------------------- | --------- | ---------------------------- | -------------------------------------- |
+| `project://overview`                     | `spec`    | プロジェクト概要             | `README.md`                            |
+| `project://setup`                        | `spec`    | セットアップ手順             | `docs/setup.md`                        |
+| `project://skills`                       | `spec`    | Claude Skills 運用方針       | `docs/claude-skills-best-practices.md` |
+| `project://commands/make`                | `derived` | make ターゲット一覧と説明    | `Makefile`                             |
+| `project://labels/lifecycle`             | `derived` | Issue ラベルと状態遷移の要約 | `labels.json`, `workflows/*.json`      |
+| `project://workflows/ai-issue-processor` | `derived` | 調査フローの説明             | `workflows/ai-issue-processor.json`    |
+| `project://workflows/ai-stuck-cleanup`   | `derived` | スタック検知と復旧フロー     | `workflows/ai-stuck-cleanup.json`      |
+| `project://drift-report`                 | `derived` | 仕様と実装の差分候補一覧     | `docs/`, `Makefile`, `workflows/`      |
 
 ### リソースメタデータ
 
 各リソースは本文に加えて以下のメタデータを持つ。
 
-| フィールド | 説明 |
-| --- | --- |
-| `kind` | `spec` / `derived` / `raw` |
-| `sourceFiles` | 元ファイルのパス一覧 |
-| `generatedAt` | 生成日時（ISO 8601） |
-| `summary` | リソースの概要 |
-| `knownGaps` | 未確定事項・TODO の一覧 |
+| フィールド    | 説明                       |
+| ------------- | -------------------------- |
+| `kind`        | `spec` / `derived` / `raw` |
+| `sourceFiles` | 元ファイルのパス一覧       |
+| `generatedAt` | 生成日時（ISO 8601）       |
+| `summary`     | リソースの概要             |
+| `knownGaps`   | 未確定事項・TODO の一覧    |
 
 型定義: `mcp-server/src/lib/types.ts` の `ResourceEntry`
 
@@ -50,10 +50,10 @@
 
 ドキュメントと実装要約を横断検索する。キーワードマッチ + 出現回数スコアリング方式。`spec` リソースにはスコア 1.5 倍のブーストを適用している。
 
-| パラメータ | 型 | 説明 |
-| --- | --- | --- |
-| `query` | `string` | 検索キーワード |
-| `scope` | `"all" \| "spec" \| "derived"` | 検索範囲（デフォルト: `all`） |
+| パラメータ | 型                             | 説明                          |
+| ---------- | ------------------------------ | ----------------------------- |
+| `query`    | `string`                       | 検索キーワード                |
+| `scope`    | `"all" \| "spec" \| "derived"` | 検索範囲（デフォルト: `all`） |
 
 入力バリデーション: Zod スキーマで実施。
 
@@ -61,18 +61,18 @@
 
 特定トピックを仕様優先でまとめて返す。`spec` を先に要約し、`derived` で補足する構成。
 
-| パラメータ | 型 | 説明 |
-| --- | --- | --- |
-| `topic` | `string` | 説明してほしいトピック |
+| パラメータ              | 型        | 説明                                           |
+| ----------------------- | --------- | ---------------------------------------------- |
+| `topic`                 | `string`  | 説明してほしいトピック                         |
 | `includeImplementation` | `boolean` | 実装由来の補足を含めるか（デフォルト: `true`） |
 
 ### `detect_doc_impl_drift`
 
 ドキュメントと実装のズレ候補を返す。
 
-| パラメータ | 型 | 説明 |
-| --- | --- | --- |
-| `area` | `string?` | 検出対象の絞り込み（省略時は全領域） |
+| パラメータ | 型        | 説明                                 |
+| ---------- | --------- | ------------------------------------ |
+| `area`     | `string?` | 検出対象の絞り込み（省略時は全領域） |
 
 現在の検出対象:
 
@@ -94,16 +94,16 @@ Phase 3 (順次):  buildDriftReport
 
 ### ノード一覧
 
-| ノード | 入力 | 出力 | ファイル |
-| --- | --- | --- | --- |
-| `loadSpecDocs` | README.md, docs/*.md | specDocs | `pipeline/nodes/load-spec-docs.ts` |
-| `loadMakefile` | Makefile | makeTargets | `pipeline/nodes/load-makefile.ts` |
-| `loadWorkflows` | workflows/*.json | workflowDefs | `pipeline/nodes/load-workflows.ts` |
-| `loadLabels` | labels.json | labelDefs | `pipeline/run-pipeline.ts` |
-| `buildMakeCommands` | makeTargets | makeResource | `pipeline/nodes/build-make-commands.ts` |
-| `buildWorkflowSummaries` | workflowDefs | workflowResources | `pipeline/nodes/build-workflow-summaries.ts` |
-| `buildLabelsLifecycle` | labelDefs, workflowDefs | labelsResource | `pipeline/nodes/build-labels-lifecycle.ts` |
-| `buildDriftReport` | labelDefs, specDocs, makeTargets, workflowDefs | driftResource, driftItems | `pipeline/nodes/build-drift-report.ts` |
+| ノード                   | 入力                                           | 出力                      | ファイル                                     |
+| ------------------------ | ---------------------------------------------- | ------------------------- | -------------------------------------------- |
+| `loadSpecDocs`           | README.md, docs/\*.md                          | specDocs                  | `pipeline/nodes/load-spec-docs.ts`           |
+| `loadMakefile`           | Makefile                                       | makeTargets               | `pipeline/nodes/load-makefile.ts`            |
+| `loadWorkflows`          | workflows/\*.json                              | workflowDefs              | `pipeline/nodes/load-workflows.ts`           |
+| `loadLabels`             | labels.json                                    | labelDefs                 | `pipeline/run-pipeline.ts`                   |
+| `buildMakeCommands`      | makeTargets                                    | makeResource              | `pipeline/nodes/build-make-commands.ts`      |
+| `buildWorkflowSummaries` | workflowDefs                                   | workflowResources         | `pipeline/nodes/build-workflow-summaries.ts` |
+| `buildLabelsLifecycle`   | labelDefs, workflowDefs                        | labelsResource            | `pipeline/nodes/build-labels-lifecycle.ts`   |
+| `buildDriftReport`       | labelDefs, specDocs, makeTargets, workflowDefs | driftResource, driftItems | `pipeline/nodes/build-drift-report.ts`       |
 
 パイプラインのオーケストレーション: `mcp-server/src/pipeline/run-pipeline.ts`
 
@@ -139,7 +139,7 @@ Express ミドルウェアで Host ヘッダーを検証し、`localhost` と `1
 `GET /health` でサーバーの稼働状態を確認できる。
 
 ```json
-{"status": "ok", "resources": 8, "driftItems": 3}
+{ "status": "ok", "resources": 8, "driftItems": 3 }
 ```
 
 ---

@@ -1,15 +1,15 @@
-import fs from "node:fs/promises";
-import path from "node:path";
-import { z } from "zod";
-import type { PipelineResult, ResourceEntry, LabelDef } from "../lib/types.js";
-import { isAllowedPath } from "../lib/allowlist.js";
-import { loadSpecDocs } from "./nodes/load-spec-docs.js";
-import { loadMakefile } from "./nodes/load-makefile.js";
-import { loadWorkflows } from "./nodes/load-workflows.js";
-import { buildMakeCommands } from "./nodes/build-make-commands.js";
-import { buildWorkflowSummaries } from "./nodes/build-workflow-summaries.js";
-import { buildLabelsLifecycle } from "./nodes/build-labels-lifecycle.js";
-import { buildDriftReport } from "./nodes/build-drift-report.js";
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { z } from 'zod';
+import type { PipelineResult, ResourceEntry, LabelDef } from '../lib/types.js';
+import { isAllowedPath } from '../lib/allowlist.js';
+import { loadSpecDocs } from './nodes/load-spec-docs.js';
+import { loadMakefile } from './nodes/load-makefile.js';
+import { loadWorkflows } from './nodes/load-workflows.js';
+import { buildMakeCommands } from './nodes/build-make-commands.js';
+import { buildWorkflowSummaries } from './nodes/build-workflow-summaries.js';
+import { buildLabelsLifecycle } from './nodes/build-labels-lifecycle.js';
+import { buildDriftReport } from './nodes/build-drift-report.js';
 
 const LabelDefSchema = z.array(
   z.object({
@@ -23,31 +23,28 @@ const LabelDefSchema = z.array(
 
 /** Load label definitions from labels.json (SSOT) */
 async function loadLabels(root: string): Promise<LabelDef[]> {
-  const rel = "labels.json";
+  const rel = 'labels.json';
   if (!isAllowedPath(rel, root)) return [];
   const full = path.join(root, rel);
   let raw: string;
   try {
-    raw = await fs.readFile(full, "utf-8");
+    raw = await fs.readFile(full, 'utf-8');
   } catch {
-    console.warn("[pipeline] labels.json not found, skipping label loading");
+    console.warn('[pipeline] labels.json not found, skipping label loading');
     return [];
   }
   try {
     return LabelDefSchema.parse(JSON.parse(raw));
   } catch (err) {
-    console.error(
-      "[pipeline] labels.json is invalid:",
-      (err as Error).message
-    );
+    console.error('[pipeline] labels.json is invalid:', (err as Error).message);
     return [];
   }
 }
 
 /** Derive a project:// URI from a spec doc path */
 function specDocToUri(docPath: string): string {
-  if (docPath === "README.md") return "project://overview";
-  return `project://${docPath.replace(/^docs\//, "").replace(/\.md$/, "")}`;
+  if (docPath === 'README.md') return 'project://overview';
+  return `project://${docPath.replace(/^docs\//, '').replace(/\.md$/, '')}`;
 }
 
 /** Build spec-layer resources from loaded documents */
@@ -58,7 +55,7 @@ function buildSpecResources(
   return specDocs.map((doc) => ({
     uri: specDocToUri(doc.path),
     title: doc.title,
-    kind: "spec" as const,
+    kind: 'spec' as const,
     sourceFiles: [doc.path],
     summary: doc.title,
     content: doc.content,
@@ -94,11 +91,7 @@ export async function runPipeline(root: string): Promise<PipelineResult> {
   const specResources = buildSpecResources(specDocs, generatedAt);
   const makeResource = buildMakeCommands(makeTargets, generatedAt);
   const workflowResources = buildWorkflowSummaries(workflowDefs, generatedAt);
-  const labelsResource = buildLabelsLifecycle(
-    labelDefs,
-    workflowDefs,
-    generatedAt
-  );
+  const labelsResource = buildLabelsLifecycle(labelDefs, workflowDefs, generatedAt);
 
   // Phase 3: Drift report
   const { resource: driftResource, items: driftItems } = buildDriftReport(

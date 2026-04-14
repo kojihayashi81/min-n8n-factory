@@ -8,11 +8,11 @@
 
 設計時に検討した動的リソーステンプレート。allowlist（`mcp-server/src/lib/allowlist.ts`）は定義済みだが、ルートは未登録。
 
-| テンプレート | 用途 |
-| --- | --- |
-| `project://file/{path}` | 公開許可されたファイルの原文参照 |
-| `project://workflow/{name}` | 特定ワークフローの整形済み説明 |
-| `project://command/{name}` | 特定コマンドの説明 |
+| テンプレート                | 用途                             |
+| --------------------------- | -------------------------------- |
+| `project://file/{path}`     | 公開許可されたファイルの原文参照 |
+| `project://workflow/{name}` | 特定ワークフローの整形済み説明   |
+| `project://command/{name}`  | 特定コマンドの説明               |
 
 `project://file/{path}` は allowlist に含まれるパスのみに制限する前提。
 

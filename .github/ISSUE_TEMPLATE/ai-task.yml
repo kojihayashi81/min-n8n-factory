@@ -1,7 +1,7 @@
 name: AI タスク
 description: Claude Code に処理させたいタスクを登録する
-title: "[AI] "
-labels: ["ai-ready"]
+title: '[AI] '
+labels: ['ai-ready']
 body:
   - type: dropdown
     id: task_type

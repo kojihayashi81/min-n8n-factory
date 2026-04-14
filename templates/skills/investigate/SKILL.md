@@ -3,7 +3,7 @@ name: investigate
 description: >
   GitHub Issue の内容を調査し、結果を openspec/investigations/ に保存して Draft PR を作成する。
   「調査して」「/investigate」と指示されたときに使用。
-argument-hint: "[issue-number]"
+argument-hint: '[issue-number]'
 disable-model-invocation: true
 allowed-tools:
   - Read

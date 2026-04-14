@@ -1,4 +1,4 @@
-import type { LabelDef, WorkflowDef, ResourceEntry } from "../../lib/types.js";
+import type { LabelDef, WorkflowDef, ResourceEntry } from '../../lib/types.js';
 
 /** Extract labels actually used in workflow JSON */
 export function extractImplLabels(defs: WorkflowDef[]): Set<string> {
@@ -7,22 +7,18 @@ export function extractImplLabels(defs: WorkflowDef[]): Set<string> {
     for (const node of wf.nodes) {
       const params = node.parameters;
       // Check filter labels
-      const filters = params.getRepositoryIssuesFilters as
-        | { labels?: string }
-        | undefined;
+      const filters = params.getRepositoryIssuesFilters as { labels?: string } | undefined;
       if (filters?.labels) labels.add(filters.labels);
       const filters2 = params.filters as { labels?: string } | undefined;
       if (filters2?.labels) labels.add(filters2.labels);
       // Check editFields labels
-      const editFields = params.editFields as
-        | { labels?: string | { label: string }[] }
-        | undefined;
+      const editFields = params.editFields as { labels?: string | { label: string }[] } | undefined;
       if (editFields?.labels) {
-        if (typeof editFields.labels === "string") {
+        if (typeof editFields.labels === 'string') {
           labels.add(editFields.labels);
         } else if (Array.isArray(editFields.labels)) {
           for (const l of editFields.labels) {
-            if (l && typeof l.label === "string") labels.add(l.label);
+            if (l && typeof l.label === 'string') labels.add(l.label);
           }
         }
       }
@@ -39,7 +35,7 @@ export function buildLabelsLifecycle(
   const implLabels = extractImplLabels(workflowDefs);
   if (workflowDefs.length > 0 && implLabels.size === 0) {
     console.warn(
-      "[pipeline] extractImplLabels returned 0 labels from workflows — n8n node structure may have changed"
+      '[pipeline] extractImplLabels returned 0 labels from workflows — n8n node structure may have changed'
     );
   }
   const specLabelNames = new Set(labelDefs.map((l) => l.name));
@@ -48,23 +44,17 @@ export function buildLabelsLifecycle(
   // Labels in impl but not in spec
   for (const label of implLabels) {
     if (!specLabelNames.has(label)) {
-      gaps.push(
-        `ラベル "${label}" はワークフローで使用されているが labels.json に未定義`
-      );
+      gaps.push(`ラベル "${label}" はワークフローで使用されているが labels.json に未定義`);
     }
   }
   // Labels in spec but not in impl
   for (const label of labelDefs) {
     if (!implLabels.has(label.name)) {
-      gaps.push(
-        `ラベル "${label.name}" は labels.json に定義されているがワークフローで未使用`
-      );
+      gaps.push(`ラベル "${label.name}" は labels.json に定義されているがワークフローで未使用`);
     }
   }
 
-  const specTable = labelDefs
-    .map((l) => `| \`${l.name}\` | ${l.meaning} |`)
-    .join("\n");
+  const specTable = labelDefs.map((l) => `| \`${l.name}\` | ${l.meaning} |`).join('\n');
 
   const meaningMap = new Map(labelDefs.map((l) => [l.name, l.meaning]));
   let step = 0;
@@ -72,40 +62,35 @@ export function buildLabelsLifecycle(
   for (const label of labelDefs) {
     for (const target of label.transitionsTo) {
       step++;
-      const targetMeaning = meaningMap.get(target) ?? "";
-      transitionLines.push(
-        `${step}. \`${label.name}\` → \`${target}\`（${targetMeaning}）`
-      );
+      const targetMeaning = meaningMap.get(target) ?? '';
+      transitionLines.push(`${step}. \`${label.name}\` → \`${target}\`（${targetMeaning}）`);
     }
   }
-  const transitions = transitionLines.join("\n");
+  const transitions = transitionLines.join('\n');
 
   const content = [
-    "# Issue ラベルと状態遷移",
-    "",
-    "## 定義済みラベル（labels.json）",
-    "",
-    "| ラベル | 意味 |",
-    "| --- | --- |",
+    '# Issue ラベルと状態遷移',
+    '',
+    '## 定義済みラベル（labels.json）',
+    '',
+    '| ラベル | 意味 |',
+    '| --- | --- |',
     specTable,
-    "",
-    "## 状態遷移",
-    "",
+    '',
+    '## 状態遷移',
+    '',
     transitions,
-    "",
-    "## ワークフローで実際に使用されているラベル",
-    "",
-    [...implLabels].map((l) => `- \`${l}\``).join("\n"),
-  ].join("\n");
+    '',
+    '## ワークフローで実際に使用されているラベル',
+    '',
+    [...implLabels].map((l) => `- \`${l}\``).join('\n'),
+  ].join('\n');
 
   return {
-    uri: "project://labels/lifecycle",
-    title: "Issue ラベルと状態遷移",
-    kind: "derived",
-    sourceFiles: [
-      "labels.json",
-      ...workflowDefs.map((w) => `workflows/${w.fileName}`),
-    ],
+    uri: 'project://labels/lifecycle',
+    title: 'Issue ラベルと状態遷移',
+    kind: 'derived',
+    sourceFiles: ['labels.json', ...workflowDefs.map((w) => `workflows/${w.fileName}`)],
     summary: `${labelDefs.length} 個の定義済みラベル、${implLabels.size} 個の実装ラベル`,
     content,
     knownGaps: gaps,

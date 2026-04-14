@@ -105,11 +105,11 @@ make up
 
 GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token
 
-| 設定項目 | 値 |
-| --- | --- |
-| Repository access | 対象リポジトリのみ選択 |
-| Issues | Read and write |
-| Contents | Read and write（実装フェーズで必要） |
+| 設定項目          | 値                                   |
+| ----------------- | ------------------------------------ |
+| Repository access | 対象リポジトリのみ選択               |
+| Issues            | Read and write                       |
+| Contents          | Read and write（実装フェーズで必要） |
 
 発行したトークンは 1Password に保存する。
 
@@ -117,11 +117,11 @@ GitHub → Settings → Developer settings → Personal access tokens → Fine-g
 
 n8n UI → 左サイドバー `+` → Add credential → `GitHub API` を選択
 
-| フィールド | 値 |
-| --- | --- |
+| フィールド      | 値                                             |
+| --------------- | ---------------------------------------------- |
 | Credential Name | `github-<リポジトリ名>`（例: `github-gomoku`） |
-| GitHub Server | `https://api.github.com` |
-| Access Token | 発行した Fine-grained PAT |
+| GitHub Server   | `https://api.github.com`                       |
+| Access Token    | 発行した Fine-grained PAT                      |
 
 > PAT は n8n Credentials にのみ登録する。`.env` には書かない。
 
@@ -129,22 +129,22 @@ n8n UI → 左サイドバー `+` → Add credential → `GitHub API` を選択
 
 ## GitHub 連携の懸念点
 
-| 懸念点 | 内容 | 対策 |
-| --- | --- | --- |
-| **PAT の期限** | Fine-grained PAT は最長1年。切れたら再発行・n8n Credentials の再登録が必要 | 個人開発は No expiration、チーム利用時は GitHub App へ移行 |
-| **PAT の漏洩** | n8n Credentials に保存されるため n8n のセキュリティに依存 | ローカル完結の間は許容。外部公開時は GitHub App へ移行 |
-| **複数リポジトリ管理** | 対象リポジトリごとに PAT を発行・管理する必要がある | チーム利用時は GitHub App で一括管理 |
-| **GitHub App への移行** | チーム開発・長期運用のベストプラクティス。JWT 認証が必要で設定が複雑 | プロトタイプ完成後に対応 |
+| 懸念点                       | 内容                                                                                          | 対策                                                                                               |
+| ---------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **PAT の期限**               | Fine-grained PAT は最長1年。切れたら再発行・n8n Credentials の再登録が必要                    | 個人開発は No expiration、チーム利用時は GitHub App へ移行                                         |
+| **PAT の漏洩**               | n8n Credentials に保存されるため n8n のセキュリティに依存                                     | ローカル完結の間は許容。外部公開時は GitHub App へ移行                                             |
+| **複数リポジトリ管理**       | 対象リポジトリごとに PAT を発行・管理する必要がある                                           | チーム利用時は GitHub App で一括管理                                                               |
+| **GitHub App への移行**      | チーム開発・長期運用のベストプラクティス。JWT 認証が必要で設定が複雑                          | プロトタイプ完成後に対応                                                                           |
 | **PAT の自動ローテーション** | PAT 再発行はブラウザ操作が必須のため完全自動化不可。バッチで n8n を再認証する案も現実的でない | 自動ローテーションが必要なら GitHub App（トークンが1時間ごとに自動更新）に移行するのが唯一の現実解 |
 
 ---
 
 ## PAT 権限
 
-| PAT | 必要な権限 |
-| --- | --- |
-| `min-n8n-factory` 用（このリポジトリ管理） | Contents: Read & Write |
-| AIワークフロー対象リポジトリ用 | Issues: Read（取得のみ）/ Issues: Read & Write（作成・更新も行う場合） |
+| PAT                                        | 必要な権限                                                             |
+| ------------------------------------------ | ---------------------------------------------------------------------- |
+| `min-n8n-factory` 用（このリポジトリ管理） | Contents: Read & Write                                                 |
+| AIワークフロー対象リポジトリ用             | Issues: Read（取得のみ）/ Issues: Read & Write（作成・更新も行う場合） |
 
 ---
 
@@ -167,12 +167,12 @@ make setup-labels
 
 以下の4つのラベルが作成される（定義元: [`labels.json`](/labels.json)）:
 
-| ラベル | 意味 |
-| --- | --- |
-| `ai-ready` | 唯一のトリガー。人間のみが付与する |
-| `ai-processing` | AI 処理中。二重起動防止ガード |
+| ラベル            | 意味                                      |
+| ----------------- | ----------------------------------------- |
+| `ai-ready`        | 唯一のトリガー。人間のみが付与する        |
+| `ai-processing`   | AI 処理中。二重起動防止ガード             |
 | `ai-investigated` | 調査完了。Draft PR 作成済み・レビュー待ち |
-| `ai-failed` | エラー・タイムアウト。人間の介入が必要 |
+| `ai-failed`       | エラー・タイムアウト。人間の介入が必要    |
 
 ### 3. Issue Form テンプレートを配布
 
