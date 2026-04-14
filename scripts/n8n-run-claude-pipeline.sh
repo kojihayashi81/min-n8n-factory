@@ -189,6 +189,16 @@ run_agent() {
 # validate_json: check that an agent's stdout is valid JSON and contains
 # the required top-level keys.
 #
+# Claude occasionally ignores "JSON only" prompt constraints and prepends
+# a natural-language preamble like "I have sufficient data. Let me compile
+# the final output." before the actual JSON, which previously caused jq
+# to reject the whole response and the agent was marked as failed. Guard
+# against that by first extracting the largest balanced `{...}` block from
+# stdout (ignoring any surrounding prose) and overwriting the stdout file
+# with the cleaned JSON. The original is preserved alongside as
+# <name>.stdout.raw so emit_failure / skip diagnostics can still show the
+# full claude response on parse failures.
+#
 # Args:
 #   $1 = agent name (must match run_agent call)
 #   $2 = jq filter expression that must evaluate truthy (e.g. '.foo and .bar')
@@ -198,6 +208,39 @@ validate_json() {
   local name=$1
   local required=$2
   local file="$WORK_DIR/${name}.stdout"
+
+  # Keep the original response on disk (once) so diagnostics still have
+  # the full context after we rewrite $file with the cleaned JSON.
+  if [ ! -f "$file.raw" ]; then
+    cp "$file" "$file.raw" 2>/dev/null || true
+  fi
+
+  # Carve out the first balanced top-level object. node is always
+  # available inside the n8n container (n8n is a node app), which keeps
+  # this free of jq version quirks around pre-JSON text.
+  if ! node -e '
+    const fs = require("fs");
+    const raw = fs.readFileSync(process.argv[1], "utf8");
+    const start = raw.indexOf("{");
+    if (start < 0) process.exit(2);
+    let depth = 0, inStr = false, esc = false, end = -1;
+    for (let i = start; i < raw.length; i++) {
+      const c = raw[i];
+      if (esc) { esc = false; continue; }
+      if (inStr) {
+        if (c === "\\") esc = true;
+        else if (c === "\"") inStr = false;
+        continue;
+      }
+      if (c === "\"") inStr = true;
+      else if (c === "{") depth++;
+      else if (c === "}") { if (--depth === 0) { end = i; break; } }
+    }
+    if (end < 0) process.exit(3);
+    fs.writeFileSync(process.argv[2], raw.slice(start, end + 1));
+  ' "$file.raw" "$file" 2>/dev/null; then
+    return 1
+  fi
 
   if ! jq -e "$required" "$file" >/dev/null 2>&1; then
     return 1
@@ -338,10 +381,17 @@ $CODE_OUT"
     web_skip_cause="schema validation failed (missing .official_docs / .similar_issues or invalid JSON)"
   fi
   if [ -n "$web_skip_cause" ]; then
+    # Prefer the raw unmodified stdout for diagnostics so we can see any
+    # natural-language preamble that defeated validate_json; fall back to
+    # the (possibly rewritten) cleaned stdout if validate_json never ran.
+    web_stdout_for_log="$WORK_DIR/web-investigator.stdout.raw"
+    if [ ! -f "$web_stdout_for_log" ]; then
+      web_stdout_for_log="$WORK_DIR/web-investigator.stdout"
+    fi
     {
       echo "=== Web Investigator skip: $web_skip_cause ==="
-      echo "--- web-investigator.stdout (head 10) ---"
-      head -n 10 "$WORK_DIR/web-investigator.stdout" 2>/dev/null || echo "(empty)"
+      echo "--- web-investigator stdout (head 10, $web_stdout_for_log) ---"
+      head -n 10 "$web_stdout_for_log" 2>/dev/null || echo "(empty)"
       echo "--- web-investigator.stderr (head 10) ---"
       head -n 10 "$WORK_DIR/web-investigator.stderr" 2>/dev/null || echo "(empty)"
       echo "=== (falling back to empty web result, score will scale to /80) ==="
