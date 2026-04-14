@@ -326,8 +326,26 @@ $CODE_OUT"
     <"$WORK_DIR/web-investigator.prompt"
   web_exit=$?
   set -e
-  if [ "$web_exit" -ne 0 ] || ! validate_json web-investigator '.official_docs and .similar_issues'; then
-    echo "=== Web Investigator failed or produced invalid JSON; continuing with empty result ===" >&2
+  # Separate the two skip reasons so diagnostic output tells us which
+  # one to chase next (agent-side exit vs schema/parse failure). The
+  # validate_json call only knows "did jq accept it", so we also dump
+  # the first few lines of stdout/stderr when we skip — otherwise the
+  # next time this fires in prod we have zero visibility into *why*.
+  web_skip_cause=""
+  if [ "$web_exit" -ne 0 ]; then
+    web_skip_cause="agent exit=$web_exit"
+  elif ! validate_json web-investigator '.official_docs and .similar_issues'; then
+    web_skip_cause="schema validation failed (missing .official_docs / .similar_issues or invalid JSON)"
+  fi
+  if [ -n "$web_skip_cause" ]; then
+    {
+      echo "=== Web Investigator skip: $web_skip_cause ==="
+      echo "--- web-investigator.stdout (head 10) ---"
+      head -n 10 "$WORK_DIR/web-investigator.stdout" 2>/dev/null || echo "(empty)"
+      echo "--- web-investigator.stderr (head 10) ---"
+      head -n 10 "$WORK_DIR/web-investigator.stderr" 2>/dev/null || echo "(empty)"
+      echo "=== (falling back to empty web result, score will scale to /80) ==="
+    } >&2
     WEB_STATUS="skipped"
     WEB_SKIP_REASON="web_failed"
     printf '%s' '{"official_docs":[],"similar_issues":[],"constraints":"","migration_notes":"","skipped":"web investigator failed"}' \
