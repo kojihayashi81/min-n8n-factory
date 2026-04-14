@@ -12,6 +12,8 @@ const {
   buildPayloadForContext,
   extractPrUrl,
   extractPrNumber,
+  extractQualityScore,
+  extractQualityScoreRerun,
   elapsedSinceStart,
   resolveFailureError,
   scrubSecrets,
@@ -140,6 +142,73 @@ test('buildSuccessMessage: prUrl が null のとき PR ボタンを出さず sec
   assert.doesNotMatch(context.elements[0].text, /→ PR/);
 });
 
+test('buildSuccessMessage: qualityScore を渡すと section に「品質スコア: X / Y」を追加する', () => {
+  const msg = buildSuccessMessage({
+    ...COMMON,
+    threadTs: '0',
+    prUrl: 'https://github.com/owner/repo/pull/99',
+    qualityScore: 78,
+    qualityScoreMax: 100,
+  });
+  const section = findBlock(msg, 'section');
+  assert.match(section.text.text, /Draft PR を作成しました/);
+  assert.match(section.text.text, /品質スコア: 78 \/ 100/);
+  assert.doesNotMatch(section.text.text, /再実行後/);
+});
+
+test(
+  'buildSuccessMessage: qualityScoreRerun を渡すと「初回 X / Y → 再実行後 X' +
+    "'" +
+    ' / Y」表示になる',
+  () => {
+    const msg = buildSuccessMessage({
+      ...COMMON,
+      threadTs: '0',
+      prUrl: 'https://github.com/owner/repo/pull/99',
+      qualityScore: 55,
+      qualityScoreMax: 100,
+      qualityScoreRerun: 82,
+    });
+    const section = findBlock(msg, 'section');
+    assert.match(section.text.text, /品質スコア: 初回 55 \/ 100 → 再実行後 82 \/ 100/);
+  }
+);
+
+test('buildSuccessMessage: qualityScoreMax=80 は Web スキップの注記付きで表示される', () => {
+  const msg = buildSuccessMessage({
+    ...COMMON,
+    threadTs: '0',
+    prUrl: 'https://github.com/owner/repo/pull/99',
+    qualityScore: 64,
+    qualityScoreMax: 80,
+  });
+  const section = findBlock(msg, 'section');
+  assert.match(section.text.text, /品質スコア: 64 \/ 80/);
+  assert.match(section.text.text, /Web 調査スキップ/);
+});
+
+test('buildSuccessMessage: qualityScore を渡さない場合は品質スコア行を含まない（後方互換）', () => {
+  const msg = buildSuccessMessage({
+    ...COMMON,
+    threadTs: '0',
+    prUrl: 'https://github.com/owner/repo/pull/99',
+  });
+  const section = findBlock(msg, 'section');
+  assert.doesNotMatch(section.text.text, /品質スコア/);
+});
+
+test('buildSuccessMessage: qualityScoreMax が未指定なら 100 点満点として扱う', () => {
+  const msg = buildSuccessMessage({
+    ...COMMON,
+    threadTs: '0',
+    prUrl: 'https://github.com/owner/repo/pull/99',
+    qualityScore: 75,
+  });
+  const section = findBlock(msg, 'section');
+  assert.match(section.text.text, /品質スコア: 75 \/ 100/);
+  assert.doesNotMatch(section.text.text, /Web 調査スキップ/);
+});
+
 test('buildSuccessMessage: prUrl が PR URL として解釈できない文字列でも PR ボタンを出さない', () => {
   const msg = buildSuccessMessage({
     ...COMMON,
@@ -149,6 +218,42 @@ test('buildSuccessMessage: prUrl が PR URL として解釈できない文字列
   assert.equal(findButton(msg, 'PR #'), undefined);
   const context = findBlock(msg, 'context');
   assert.doesNotMatch(context.elements[0].text, /PR #—/);
+});
+
+// ─── extractQualityScore / extractQualityScoreRerun ──────────────
+
+test('extractQualityScore: QUALITY_SCORE=X/Y 行を抽出する', () => {
+  const stdout = 'blah\nQUALITY_SCORE=78/100\nhttps://github.com/owner/repo/pull/42\n';
+  assert.deepEqual(extractQualityScore(stdout), { score: 78, max: 100 });
+});
+
+test('extractQualityScore: 80 点満点ケースも抽出できる', () => {
+  const stdout = 'QUALITY_SCORE=64/80';
+  assert.deepEqual(extractQualityScore(stdout), { score: 64, max: 80 });
+});
+
+test('extractQualityScore: センチネル行がなければ null を返す', () => {
+  assert.equal(extractQualityScore('just some stdout without marker'), null);
+});
+
+test('extractQualityScore: stdout が null / undefined でも安全', () => {
+  assert.equal(extractQualityScore(null), null);
+  assert.equal(extractQualityScore(undefined), null);
+});
+
+test('extractQualityScore: QUALITY_SCORE_RERUN 行を誤って初回スコアとして拾わない', () => {
+  const stdout = 'QUALITY_SCORE_RERUN=85/100';
+  assert.equal(extractQualityScore(stdout), null);
+});
+
+test('extractQualityScoreRerun: QUALITY_SCORE_RERUN=X/Y 行を抽出する', () => {
+  const stdout = 'QUALITY_SCORE=55/100\nQUALITY_SCORE_RERUN=82/100\n';
+  assert.deepEqual(extractQualityScoreRerun(stdout), { score: 82, max: 100 });
+});
+
+test('extractQualityScoreRerun: センチネル行がなければ null（再実行なしのケース）', () => {
+  const stdout = 'QUALITY_SCORE=78/100';
+  assert.equal(extractQualityScoreRerun(stdout), null);
 });
 
 // ─── buildFailureMessage ─────────────────────────────────────────
@@ -587,6 +692,70 @@ test('buildPayloadForContext: kind=success で stdout の PR URL を抽出', () 
   const prBtn = findButton(payload, 'PR #43');
   assert.ok(prBtn);
   assert.equal(prBtn.url, 'https://github.com/owner/repo/pull/43');
+});
+
+test('buildPayloadForContext: kind=success で stdout の QUALITY_SCORE センチネル行を品質スコア表示に変換する', () => {
+  const payload = buildPayloadForContext({
+    kind: 'success',
+    issue: ISSUE,
+    env: ENV,
+    threadTs: '0',
+    runClaudeOutput: {
+      stdout: [
+        '進捗: Collector done',
+        'QUALITY_SCORE=78/100',
+        'https://github.com/owner/repo/pull/43',
+      ].join('\n'),
+    },
+  });
+  const section = findBlock(payload, 'section');
+  assert.match(section.text.text, /品質スコア: 78 \/ 100/);
+  assert.doesNotMatch(section.text.text, /再実行後/);
+});
+
+test('buildPayloadForContext: kind=success で QUALITY_SCORE_RERUN があれば再実行後スコアも表示する', () => {
+  const payload = buildPayloadForContext({
+    kind: 'success',
+    issue: ISSUE,
+    env: ENV,
+    threadTs: '0',
+    runClaudeOutput: {
+      stdout: [
+        'QUALITY_SCORE=55/100',
+        'QUALITY_SCORE_RERUN=82/100',
+        'https://github.com/owner/repo/pull/43',
+      ].join('\n'),
+    },
+  });
+  const section = findBlock(payload, 'section');
+  assert.match(section.text.text, /初回 55 \/ 100 → 再実行後 82 \/ 100/);
+});
+
+test('buildPayloadForContext: kind=success で QUALITY_SCORE=X/80 は Web スキップ注記付きで表示', () => {
+  const payload = buildPayloadForContext({
+    kind: 'success',
+    issue: ISSUE,
+    env: ENV,
+    threadTs: '0',
+    runClaudeOutput: {
+      stdout: ['QUALITY_SCORE=64/80', 'https://github.com/owner/repo/pull/43'].join('\n'),
+    },
+  });
+  const section = findBlock(payload, 'section');
+  assert.match(section.text.text, /品質スコア: 64 \/ 80/);
+  assert.match(section.text.text, /Web 調査スキップ/);
+});
+
+test('buildPayloadForContext: kind=success で QUALITY_SCORE 行がない場合は品質スコア行を含まない', () => {
+  const payload = buildPayloadForContext({
+    kind: 'success',
+    issue: ISSUE,
+    env: ENV,
+    threadTs: '0',
+    runClaudeOutput: { stdout: 'https://github.com/owner/repo/pull/43' },
+  });
+  const section = findBlock(payload, 'section');
+  assert.doesNotMatch(section.text.text, /品質スコア/);
 });
 
 test('buildPayloadForContext: kind=success で PR URL が抽出できないと PR ボタンを出さない', () => {
