@@ -159,7 +159,7 @@
     },
     {
       "parameters": {
-        "command": "={{ '/opt/scripts/n8n-run-claude.sh ' + $('Get oldest ai-ready Issue').item.json.number }}"
+        "command": "={{ '/opt/scripts/n8n-run-claude-pipeline.sh ' + $('Get oldest ai-ready Issue').item.json.number }}"
       },
       "id": "node-run-claude",
       "name": "Run Claude Code",
@@ -167,7 +167,7 @@
       "typeVersion": 1,
       "position": [1652, 208],
       "onError": "continueErrorOutput",
-      "notes": "stdout: PR URL / stderr: --verbose ツール呼び出しログ（n8n Executions に7日間保存）"
+      "notes": "4 段エージェントパイプラインを実行。stdout: QUALITY_SCORE=X/Y / QUALITY_SCORE_RERUN=X/Y / Draft PR URL / stderr: 各エージェントの stdout/stderr（n8n Executions に7日間保存）"
     },
     {
       "parameters": {

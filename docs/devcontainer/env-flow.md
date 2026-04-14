@@ -37,7 +37,7 @@
 │  │  ├─ N8N_*         → n8n internal config                 │   │
 │  │  ├─ GITHUB_REPO   → workflow $env → GitHub nodes        │   │
 │  │  ├─ PROJECT_PATH  → workflow $env                       │   │
-│  │  ├─ GH_TOKEN      → n8n-run-claude.sh (git auth)        │   │
+│  │  ├─ GH_TOKEN      → n8n-run-claude-pipeline.sh (git)    │   │
 │  │  └─ CLAUDE_CODE_OAUTH_TOKEN                             │   │
 │  │       → devcontainer reads via ${localEnv:...}          │   │
 │  │       → passed into DevContainer env                    │   │
@@ -53,14 +53,16 @@
 │  │  │    → If (exists & not ai-processing)             │   │   │
 │  │  │    → Set ai-processing label                     │   │   │
 │  │  │    → executeCommand:                             │   │   │
-│  │  │      ┌────────────────────────────────────────┐  │   │   │
-│  │  │      │ /opt/scripts/n8n-run-claude.sh N       │  │   │   │
-│  │  │      │  1. create-worktree.sh (idempotent)    │  │   │   │
-│  │  │      │  2. start-devcontainer.sh              │  │   │   │
-│  │  │      │  3. timeout + devcontainer exec        │──┼───┼─┐ │
-│  │  │      │      claude --print "/investigate N"   │  │   │ │ │
-│  │  │      │  4. cleanup-worktree.sh (on success)   │  │   │ │ │
-│  │  │      └────────────────────────────────────────┘  │   │ │ │
+│  │  │      ┌─────────────────────────────────────────┐ │   │   │
+│  │  │      │ /opt/scripts/n8n-run-claude-pipeline.sh N│ │   │   │
+│  │  │      │  1. create-worktree.sh (idempotent)     │ │   │   │
+│  │  │      │  2. start-devcontainer.sh               │ │   │   │
+│  │  │      │  3. 4 段パイプライン実行                  │─┼───┼─┐ │
+│  │  │      │     Collector → Code → Web → Synth       │ │   │ │ │
+│  │  │      │     → Gatekeeper (+ 条件付き再実行)      │ │   │ │ │
+│  │  │      │  4. git commit + push + gh pr create    │ │   │ │ │
+│  │  │      │  5. cleanup-worktree.sh (on success)    │ │   │ │ │
+│  │  │      └─────────────────────────────────────────┘ │   │ │ │
 │  │  │    → Post PR Link to Issue                       │   │ │ │
 │  │  │    → Set ai-investigated label                   │   │ │ │
 │  │  └──────────────────────────────────────────────────┘   │ │ │
@@ -138,16 +140,16 @@
  2. [n8n]          GitHub ノード: ai-ready ラベルの最古 Issue を取得
  3. [n8n]          Issue なし or ai-processing 中 → 終了
  4. [n8n]          GitHub ノード: ai-processing ラベルを付与
- 5. [n8n]          executeCommand: /opt/scripts/n8n-run-claude.sh {N}
+ 5. [n8n]          executeCommand: /opt/scripts/n8n-run-claude-pipeline.sh {N}
     [n8n]            5a. create-worktree.sh → .worktrees/issue-{N} を作成（冪等）
     [n8n]            5b. start-devcontainer.sh → DevContainer をビルド/起動
-    [n8n]            5c. timeout + devcontainer exec → DevContainer 内で claude 実行
- 6. [DevContainer]  claude が gh CLI で Issue 内容を取得
- 7. [DevContainer]  claude が調査（Web 検索、コード分析）
- 8. [DevContainer]  claude が Markdown を openspec/investigations/ に保存
- 9. [DevContainer]  claude が issues/{N} ブランチにコミット & プッシュ
-10. [DevContainer]  claude が gh CLI で Draft PR を作成
-11. [DevContainer]  claude が PR URL を stdout に出力
+    [n8n]            5c. 4 段エージェントパイプラインを DevContainer 内で順次実行
+ 6. [DevContainer]  Collector: gh issue view の JSON を解析
+ 7. [DevContainer]  Code Investigator: コードベース調査 + search_hints 生成
+ 8. [DevContainer]  Web Investigator: WebSearch/WebFetch で外部情報調査（任意）
+ 9. [DevContainer]  Synthesizer: 調査ノート Markdown を openspec/investigations/ に保存
+10. [DevContainer]  Gatekeeper: 品質採点 → 低スコア時は Synthesizer 再実行 + Gatekeeper 再採点
+11. [n8n→DevContainer] git commit + push + gh pr create（パイプラインスクリプトがシェルで実行）
 12. [n8n]          cleanup-worktree.sh → worktree 削除・DevContainer 停止
 13. [n8n]          PR URL を Issue にコメント投稿
 14. [n8n]          ai-investigated ラベルを付与
