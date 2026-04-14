@@ -156,7 +156,13 @@ run_agent() {
   # in it — doing so would return exit=127 "No such file or directory"
   # before claude even starts. Inline the devcontainer invocation
   # here so timeout is handed a real executable (devcontainer → node).
-  set +e
+  #
+  # Intentional: this function does NOT re-enable `set -e` before
+  # returning. bash's errexit is process-wide, not function-local, so a
+  # `set -e` here would leak back to the caller and make the non-zero
+  # return below trip errexit before the caller can inspect the code.
+  # The caller is required to wrap run_agent in its own `set +e; ...;
+  # set -e` block and handle the failure path via emit_failure.
   timeout "$timeout_sec" devcontainer exec \
     --workspace-folder "$WORKTREE_PATH" \
     --mount-git-worktree-common-dir \
@@ -169,7 +175,6 @@ run_agent() {
     -- "${claude_args[@]}" \
     >"$stdout_file" 2>"$stderr_file"
   local exit_code=$?
-  set -e
 
   echo "$exit_code" >"$exit_file"
   return "$exit_code"

@@ -60,12 +60,16 @@ function extractPrNumber(prUrl) {
   return match ? match[1] : '—';
 }
 
-// Seconds elapsed since the given ISO-8601 timestamp (what n8n's
-// $execution.startedAt returns). Falls back to 0 when the input is
+// Seconds elapsed since the given start timestamp. Accepts either an
+// ISO-8601 string (our unit tests use this shape) or a Date object
+// (what n8n's `$execution.startedAt` hands us in Code nodes — passing
+// the raw Date through `Date.parse` yields NaN and would collapse the
+// elapsed display to "0分00秒"). Falls back to 0 when the input is
 // missing or unparseable so the builders stay pure and crash-free.
 function elapsedSinceStart(startedAt) {
   if (!startedAt) return 0;
-  const startMs = Date.parse(startedAt);
+  const startMs =
+    startedAt instanceof Date ? startedAt.getTime() : new Date(startedAt).getTime();
   if (Number.isNaN(startMs)) return 0;
   const diff = Math.floor((Date.now() - startMs) / 1000);
   return diff < 0 ? 0 : diff;
