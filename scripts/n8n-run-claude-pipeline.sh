@@ -1,0 +1,401 @@
+#!/bin/bash
+# n8n-run-claude-pipeline.sh — 4 段エージェントパイプラインで Issue 調査を行う。
+#
+# 呼び出し側: n8n の `Run Claude Code` ノード（ExecuteCommand）
+#   /opt/scripts/n8n-run-claude-pipeline.sh <issue-number>
+#
+# 成功時 stdout:
+#   QUALITY_SCORE=<score>/<max>               (Gatekeeper が走った場合)
+#   QUALITY_SCORE_RERUN=<score>/<max>         (Synthesizer 再実行後のみ)
+#   https://github.com/<owner>/<repo>/pull/<n>  (作成した Draft PR の URL)
+#
+# 失敗時: 非 0 終了 + stderr に失敗エージェント名 / stdout / stderr をデリミタ付きで出力
+#
+# 設計詳細: docs/workflows/ai-issue-processor/agent_pipeline.md を参照
+set -euo pipefail
+
+ISSUE_NUMBER="${1:?Usage: n8n-run-claude-pipeline.sh <issue-number>}"
+PROJECT_PATH="${PROJECT_PATH:?Error: PROJECT_PATH is not set}"
+GH_TOKEN="${GH_TOKEN:?Error: GH_TOKEN is not set}"
+CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:?Error: CLAUDE_CODE_OAUTH_TOKEN is not set}"
+
+# Individual agent timeouts (seconds). Sum must stay under CLAUDE_TIMEOUT_SEC.
+# Defaults follow the "invariant: individual sum < pipeline total" rule documented
+# in docs/workflows/ai-issue-processor/flow.md.
+CLAUDE_TIMEOUT_SEC="${CLAUDE_TIMEOUT_SEC:-900}"
+AGENT_TIMEOUT_COLLECTOR="${AGENT_TIMEOUT_COLLECTOR:-60}"
+AGENT_TIMEOUT_CODE="${AGENT_TIMEOUT_CODE:-300}"
+AGENT_TIMEOUT_WEB="${AGENT_TIMEOUT_WEB:-120}"
+AGENT_TIMEOUT_SYNTHESIZER="${AGENT_TIMEOUT_SYNTHESIZER:-180}"
+AGENT_TIMEOUT_GATEKEEPER="${AGENT_TIMEOUT_GATEKEEPER:-60}"
+AGENT_TIMEOUT_SYNTHESIZER_RERUN="${AGENT_TIMEOUT_SYNTHESIZER_RERUN:-180}"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROMPTS_DIR="${AGENT_PROMPTS_DIR:-$SCRIPT_DIR/../prompts/agents}"
+
+# Work dir for per-agent stdout/stderr capture. Persisted to EXIT trap.
+WORK_DIR=$(mktemp -d -t n8n-pipeline-XXXXXX)
+trap 'rm -rf "$WORK_DIR"' EXIT
+
+# Git HTTPS auth via env (does NOT persist to .git/config)
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0="url.https://${GH_TOKEN}@github.com/.insteadOf"
+export GIT_CONFIG_VALUE_0="git@github.com:"
+
+# ─── Worktree + devcontainer setup ───────────────────────────────
+
+WORKTREE_PATH=$("$SCRIPT_DIR/create-worktree.sh" "$ISSUE_NUMBER")
+echo "worktree: $WORKTREE_PATH" >&2
+"$SCRIPT_DIR/start-devcontainer.sh" "$WORKTREE_PATH" >&2
+
+# ─── Helpers ─────────────────────────────────────────────────────
+
+# dc_exec: run a command inside the devcontainer with required env vars.
+# Usage: dc_exec <cmd> [args...]
+dc_exec() {
+  devcontainer exec --workspace-folder "$WORKTREE_PATH" \
+    --remote-env "CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN" \
+    --remote-env "GH_TOKEN=$GH_TOKEN" \
+    -- "$@"
+}
+
+# run_agent: invoke `claude --print` for a single pipeline agent.
+#
+# Args:
+#   $1 = agent name (used for temp file naming and error output)
+#   $2 = per-agent timeout in seconds
+#   $3 = --allowedTools value (space-separated, empty string for none)
+#   $4 = path to system prompt file (on host, read and embedded in flag)
+#
+# Stdin: the user prompt (piped into claude via devcontainer exec)
+# Captures:
+#   $WORK_DIR/<name>.stdout
+#   $WORK_DIR/<name>.stderr
+#   $WORK_DIR/<name>.exit
+#
+# Returns 0 on success, non-zero on agent failure or timeout.
+run_agent() {
+  local name=$1
+  local timeout_sec=$2
+  local allowed_tools=$3
+  local system_prompt_file=$4
+
+  local stdout_file="$WORK_DIR/${name}.stdout"
+  local stderr_file="$WORK_DIR/${name}.stderr"
+  local exit_file="$WORK_DIR/${name}.exit"
+
+  if [ ! -f "$system_prompt_file" ]; then
+    echo "=== agent=$name missing system prompt: $system_prompt_file ===" >&2
+    return 1
+  fi
+
+  local system_prompt
+  system_prompt=$(cat "$system_prompt_file")
+
+  # Build the claude command. --output-format text keeps stdout as the raw
+  # assistant response so we can feed it straight into jq (no session meta).
+  local -a claude_args=(
+    claude
+    --print
+    --output-format text
+    --dangerously-skip-permissions
+    --append-system-prompt
+    "$system_prompt"
+  )
+  if [ -n "$allowed_tools" ]; then
+    claude_args+=(--allowedTools "$allowed_tools")
+  fi
+
+  set +e
+  timeout "$timeout_sec" dc_exec "${claude_args[@]}" \
+    >"$stdout_file" 2>"$stderr_file"
+  local exit_code=$?
+  set -e
+
+  echo "$exit_code" >"$exit_file"
+  return "$exit_code"
+}
+
+# validate_json: check that an agent's stdout is valid JSON and contains
+# the required top-level keys.
+#
+# Args:
+#   $1 = agent name (must match run_agent call)
+#   $2 = jq filter expression that must evaluate truthy (e.g. '.foo and .bar')
+#
+# Returns 0 on success, non-zero on schema violation.
+validate_json() {
+  local name=$1
+  local required=$2
+  local file="$WORK_DIR/${name}.stdout"
+
+  if ! jq -e "$required" "$file" >/dev/null 2>&1; then
+    return 1
+  fi
+}
+
+# emit_failure: print a framed failure record to stderr and exit non-zero.
+# The record is picked up by n8n's ExecuteCommand node as the `error` field
+# and fed to resolveFailureError → scrubSecrets on the way to Slack/GitHub.
+emit_failure() {
+  local name=$1
+  local exit_code=$2
+  local reason=$3
+
+  echo "=== pipeline failed at agent=$name (exit=$exit_code, reason=$reason) ===" >&2
+  if [ -f "$WORK_DIR/${name}.stdout" ]; then
+    echo "--- ${name} stdout ---" >&2
+    cat "$WORK_DIR/${name}.stdout" >&2
+  fi
+  if [ -f "$WORK_DIR/${name}.stderr" ]; then
+    echo "--- ${name} stderr ---" >&2
+    cat "$WORK_DIR/${name}.stderr" >&2
+  fi
+  exit "$exit_code"
+}
+
+# pipe_prompt: helper for callers — write a multi-line string to a temp
+# file and cat it into the next run_agent via stdin redirection.
+# Usage:
+#   pipe_prompt "name" "$prompt_text"
+#   run_agent ... <"$WORK_DIR/name.prompt"
+pipe_prompt() {
+  local name=$1
+  local content=$2
+  printf '%s' "$content" >"$WORK_DIR/${name}.prompt"
+}
+
+# ─── Prepare branch ──────────────────────────────────────────────
+
+BRANCH="issues/${ISSUE_NUMBER}"
+NOTE_REL_PATH="openspec/investigations/issue-${ISSUE_NUMBER}-investigation.md"
+NOTE_PATH_IN_CONTAINER="/workspaces/$(basename "$WORKTREE_PATH")/${NOTE_REL_PATH}"
+
+dc_exec bash -c "git fetch origin && (git checkout '$BRANCH' 2>/dev/null || git checkout -b '$BRANCH' origin/main)" >&2
+
+# ─── Agent 1: Collector ──────────────────────────────────────────
+
+ISSUE_JSON=$(dc_exec gh issue view "$ISSUE_NUMBER" --json number,title,body,labels,comments)
+
+pipe_prompt collector "Issue の JSON 入力を解析し、出力スキーマに沿った JSON のみを返してください。
+
+入力:
+$ISSUE_JSON"
+
+set +e
+run_agent collector "$AGENT_TIMEOUT_COLLECTOR" "" "$PROMPTS_DIR/collector.md" \
+  <"$WORK_DIR/collector.prompt"
+exit_code=$?
+set -e
+if [ "$exit_code" -ne 0 ]; then
+  emit_failure collector "$exit_code" "claude exit=$exit_code (timeout or error)"
+fi
+if ! validate_json collector '.issue_summary and .investigation_focus and .initial_keywords and .linked_urls'; then
+  emit_failure collector 10 "invalid JSON or missing required keys"
+fi
+
+COLLECTOR_OUT=$(cat "$WORK_DIR/collector.stdout")
+
+# ─── Agent 2a: Code Investigator ─────────────────────────────────
+
+pipe_prompt code-investigator "Collector の出力を踏まえて、コードベースを調査し、出力スキーマに沿った JSON のみを返してください。
+
+Collector 出力:
+$COLLECTOR_OUT"
+
+set +e
+run_agent code-investigator "$AGENT_TIMEOUT_CODE" \
+  "Read Grep Glob Bash(git log:*) Bash(git blame:*) Bash(cat:*)" \
+  "$PROMPTS_DIR/code-investigator.md" \
+  <"$WORK_DIR/code-investigator.prompt"
+exit_code=$?
+set -e
+if [ "$exit_code" -ne 0 ]; then
+  emit_failure code-investigator "$exit_code" "claude exit=$exit_code"
+fi
+if ! validate_json code-investigator '.related_files and .tech_stack and .current_behavior and .impact_scope and .search_hints'; then
+  emit_failure code-investigator 10 "invalid JSON or missing required keys"
+fi
+
+CODE_OUT=$(cat "$WORK_DIR/code-investigator.stdout")
+
+# ─── Agent 2b: Web Investigator (maybe skipped) ──────────────────
+
+# Skip Web investigation if Code Investigator produced no search hints —
+# per agent_pipeline.md, this path scores on an 80-point scale since
+# template-compliance item 5 would otherwise auto-dock the score.
+SEARCH_HINTS_LEN=$(jq '.search_hints | length' "$WORK_DIR/code-investigator.stdout")
+WEB_STATUS="ok"
+
+if [ "$SEARCH_HINTS_LEN" = "0" ]; then
+  WEB_STATUS="skipped"
+  echo "=== Web Investigator skipped: no search_hints ===" >&2
+  printf '%s' '{"official_docs":[],"similar_issues":[],"constraints":"","migration_notes":"","skipped":"no search hints"}' \
+    >"$WORK_DIR/web-investigator.stdout"
+else
+  pipe_prompt web-investigator "Code Investigator の結果を踏まえて外部情報を調査し、出力スキーマに沿った JSON のみを返してください。
+
+Collector 出力:
+$COLLECTOR_OUT
+
+Code Investigator 出力:
+$CODE_OUT"
+
+  set +e
+  run_agent web-investigator "$AGENT_TIMEOUT_WEB" "WebSearch WebFetch" \
+    "$PROMPTS_DIR/web-investigator.md" \
+    <"$WORK_DIR/web-investigator.prompt"
+  web_exit=$?
+  set -e
+  if [ "$web_exit" -ne 0 ] || ! validate_json web-investigator '.official_docs and .similar_issues'; then
+    echo "=== Web Investigator failed or produced invalid JSON; continuing with empty result ===" >&2
+    WEB_STATUS="skipped"
+    printf '%s' '{"official_docs":[],"similar_issues":[],"constraints":"","migration_notes":"","skipped":"web investigator failed"}' \
+      >"$WORK_DIR/web-investigator.stdout"
+  fi
+fi
+
+WEB_OUT=$(cat "$WORK_DIR/web-investigator.stdout")
+
+# ─── Agent 3: Synthesizer ────────────────────────────────────────
+
+pipe_prompt synthesizer "3 つの調査結果を統合し、調査ノートを Markdown で生成してください。Write ツールで次のパスに保存してください: $NOTE_PATH_IN_CONTAINER
+
+Collector 出力:
+$COLLECTOR_OUT
+
+Code Investigator 出力:
+$CODE_OUT
+
+Web Investigator 出力 (web_status=$WEB_STATUS):
+$WEB_OUT"
+
+set +e
+run_agent synthesizer "$AGENT_TIMEOUT_SYNTHESIZER" "Write" \
+  "$PROMPTS_DIR/synthesizer.md" \
+  <"$WORK_DIR/synthesizer.prompt"
+exit_code=$?
+set -e
+if [ "$exit_code" -ne 0 ]; then
+  emit_failure synthesizer "$exit_code" "claude exit=$exit_code"
+fi
+
+if [ ! -f "${WORKTREE_PATH}/${NOTE_REL_PATH}" ]; then
+  emit_failure synthesizer 11 "investigation note not found at $NOTE_REL_PATH"
+fi
+
+# ─── Agent 4: Gatekeeper (initial run) ───────────────────────────
+
+MAX_SCORE=100
+if [ "$WEB_STATUS" = "skipped" ]; then
+  MAX_SCORE=80
+fi
+PASS_THRESHOLD=$(( MAX_SCORE * 70 / 100 ))
+
+NOTE_CONTENT=$(cat "${WORKTREE_PATH}/${NOTE_REL_PATH}")
+
+pipe_prompt gatekeeper "web_status=$WEB_STATUS / max_score=$MAX_SCORE / pass_threshold=$PASS_THRESHOLD
+
+以下の調査ノートを採点基準に従って採点し、出力スキーマに沿った JSON のみを返してください。
+
+調査ノート:
+$NOTE_CONTENT"
+
+GATEKEEPER_OK=false
+SCORE=""
+PASS=false
+FEEDBACK=""
+
+set +e
+run_agent gatekeeper "$AGENT_TIMEOUT_GATEKEEPER" "" "$PROMPTS_DIR/gatekeeper.md" \
+  <"$WORK_DIR/gatekeeper.prompt"
+gate_exit=$?
+set -e
+
+if [ "$gate_exit" -eq 0 ] && validate_json gatekeeper '.score and (.pass != null)'; then
+  GATEKEEPER_OK=true
+  SCORE=$(jq -r '.score' "$WORK_DIR/gatekeeper.stdout")
+  PASS=$(jq -r '.pass' "$WORK_DIR/gatekeeper.stdout")
+  FEEDBACK=$(jq -r '.feedback // ""' "$WORK_DIR/gatekeeper.stdout")
+else
+  echo "=== Gatekeeper failed or produced invalid JSON; continuing without score ===" >&2
+fi
+
+# ─── Synthesizer rerun + Gatekeeper 2nd run (if Gatekeeper failed threshold) ───
+
+SCORE_RERUN=""
+if [ "$GATEKEEPER_OK" = "true" ] && [ "$PASS" = "false" ]; then
+  echo "=== Gatekeeper initial score=$SCORE < threshold=$PASS_THRESHOLD; running Synthesizer rerun with feedback ===" >&2
+
+  pipe_prompt synthesizer-rerun "Gatekeeper のフィードバックを踏まえて、指摘箇所を改善した調査ノートを同じパスに上書き保存してください: $NOTE_PATH_IN_CONTAINER
+
+Gatekeeper feedback:
+$FEEDBACK
+
+Collector 出力:
+$COLLECTOR_OUT
+
+Code Investigator 出力:
+$CODE_OUT
+
+Web Investigator 出力 (web_status=$WEB_STATUS):
+$WEB_OUT
+
+現在の調査ノート:
+$NOTE_CONTENT"
+
+  set +e
+  run_agent synthesizer-rerun "$AGENT_TIMEOUT_SYNTHESIZER_RERUN" "Write" \
+    "$PROMPTS_DIR/synthesizer.md" \
+    <"$WORK_DIR/synthesizer-rerun.prompt"
+  rerun_exit=$?
+  set -e
+
+  if [ "$rerun_exit" -eq 0 ]; then
+    NOTE_CONTENT=$(cat "${WORKTREE_PATH}/${NOTE_REL_PATH}")
+
+    pipe_prompt gatekeeper-rerun "web_status=$WEB_STATUS / max_score=$MAX_SCORE / pass_threshold=$PASS_THRESHOLD (通知用の 2 回目採点、閾値判定は使わない)
+
+以下の調査ノートを採点し、出力スキーマに沿った JSON のみを返してください。
+
+調査ノート:
+$NOTE_CONTENT"
+
+    set +e
+    run_agent gatekeeper-rerun "$AGENT_TIMEOUT_GATEKEEPER" "" "$PROMPTS_DIR/gatekeeper.md" \
+      <"$WORK_DIR/gatekeeper-rerun.prompt"
+    gate2_exit=$?
+    set -e
+
+    if [ "$gate2_exit" -eq 0 ] && validate_json gatekeeper-rerun '.score'; then
+      SCORE_RERUN=$(jq -r '.score' "$WORK_DIR/gatekeeper-rerun.stdout")
+    else
+      echo "=== Gatekeeper rerun failed; rerun score unavailable ===" >&2
+    fi
+  else
+    echo "=== Synthesizer rerun failed (exit=$rerun_exit); continuing with initial note ===" >&2
+  fi
+fi
+
+# ─── Commit + push + PR ──────────────────────────────────────────
+
+dc_exec bash -c "cd '$WORKTREE_PATH' && git add '$NOTE_REL_PATH' && git commit -m 'investigate: add investigation note for issue #${ISSUE_NUMBER}' && git push -u origin '$BRANCH'" >&2
+
+PR_URL=$(dc_exec gh pr create \
+  --draft \
+  --title "investigate: Issue #${ISSUE_NUMBER} 調査ノート" \
+  --body "Closes #${ISSUE_NUMBER}" \
+  --head "$BRANCH" 2>&1 | tail -1)
+
+# ─── Emit success output ─────────────────────────────────────────
+
+if [ -n "$SCORE" ]; then
+  echo "QUALITY_SCORE=${SCORE}/${MAX_SCORE}"
+fi
+if [ -n "$SCORE_RERUN" ]; then
+  echo "QUALITY_SCORE_RERUN=${SCORE_RERUN}/${MAX_SCORE}"
+fi
+echo "$PR_URL"
+
+# Cleanup on success only — failure path leaves the worktree for inspection
+"$SCRIPT_DIR/cleanup-worktree.sh" "$ISSUE_NUMBER" >&2 || true
