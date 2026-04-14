@@ -15,6 +15,10 @@
 set -euo pipefail
 
 ISSUE_NUMBER="${1:?Usage: n8n-run-claude-pipeline.sh <issue-number>}"
+if [[ ! "$ISSUE_NUMBER" =~ ^[0-9]+$ ]]; then
+  echo "Error: issue number must be a positive integer (got: $ISSUE_NUMBER)" >&2
+  exit 2
+fi
 PROJECT_PATH="${PROJECT_PATH:?Error: PROJECT_PATH is not set}"
 GH_TOKEN="${GH_TOKEN:?Error: GH_TOKEN is not set}"
 CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:?Error: CLAUDE_CODE_OAUTH_TOKEN is not set}"
@@ -22,13 +26,32 @@ CLAUDE_CODE_OAUTH_TOKEN="${CLAUDE_CODE_OAUTH_TOKEN:?Error: CLAUDE_CODE_OAUTH_TOK
 # Individual agent timeouts (seconds). Sum must stay under CLAUDE_TIMEOUT_SEC.
 # Defaults follow the "invariant: individual sum < pipeline total" rule documented
 # in docs/workflows/ai-issue-processor/flow.md.
-CLAUDE_TIMEOUT_SEC="${CLAUDE_TIMEOUT_SEC:-900}"
+CLAUDE_TIMEOUT_SEC="${CLAUDE_TIMEOUT_SEC:-1020}"
 AGENT_TIMEOUT_COLLECTOR="${AGENT_TIMEOUT_COLLECTOR:-60}"
 AGENT_TIMEOUT_CODE="${AGENT_TIMEOUT_CODE:-300}"
 AGENT_TIMEOUT_WEB="${AGENT_TIMEOUT_WEB:-120}"
 AGENT_TIMEOUT_SYNTHESIZER="${AGENT_TIMEOUT_SYNTHESIZER:-180}"
 AGENT_TIMEOUT_GATEKEEPER="${AGENT_TIMEOUT_GATEKEEPER:-60}"
 AGENT_TIMEOUT_SYNTHESIZER_RERUN="${AGENT_TIMEOUT_SYNTHESIZER_RERUN:-180}"
+
+# Invariant (see docs/workflows/ai-issue-processor/flow.md):
+#   sum of per-agent timeouts (including Synthesizer rerun + 2nd Gatekeeper)
+#   must stay strictly below CLAUDE_TIMEOUT_SEC so the pipeline can surface
+#   a per-agent timeout before n8n kills the whole ExecuteCommand.
+AGENT_TIMEOUT_SUM=$((
+  AGENT_TIMEOUT_COLLECTOR
+  + AGENT_TIMEOUT_CODE
+  + AGENT_TIMEOUT_WEB
+  + AGENT_TIMEOUT_SYNTHESIZER
+  + AGENT_TIMEOUT_GATEKEEPER
+  + AGENT_TIMEOUT_SYNTHESIZER_RERUN
+  + AGENT_TIMEOUT_GATEKEEPER
+))
+if [ "$AGENT_TIMEOUT_SUM" -ge "$CLAUDE_TIMEOUT_SEC" ]; then
+  echo "Error: sum of per-agent timeouts ($AGENT_TIMEOUT_SUM s) must be < CLAUDE_TIMEOUT_SEC ($CLAUDE_TIMEOUT_SEC s)" >&2
+  echo "  collector=$AGENT_TIMEOUT_COLLECTOR code=$AGENT_TIMEOUT_CODE web=$AGENT_TIMEOUT_WEB synthesizer=$AGENT_TIMEOUT_SYNTHESIZER gatekeeper=$AGENT_TIMEOUT_GATEKEEPER synthesizer_rerun=$AGENT_TIMEOUT_SYNTHESIZER_RERUN gatekeeper_rerun=$AGENT_TIMEOUT_GATEKEEPER" >&2
+  exit 2
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROMPTS_DIR="${AGENT_PROMPTS_DIR:-$SCRIPT_DIR/../prompts/agents}"
@@ -205,7 +228,7 @@ $COLLECTOR_OUT"
 
 set +e
 run_agent code-investigator "$AGENT_TIMEOUT_CODE" \
-  "Read Grep Glob Bash(git log:*) Bash(git blame:*) Bash(cat:*)" \
+  "Read Grep Glob Bash(git log:*) Bash(git blame:*)" \
   "$PROMPTS_DIR/code-investigator.md" \
   <"$WORK_DIR/code-investigator.prompt"
 exit_code=$?
@@ -226,9 +249,16 @@ CODE_OUT=$(cat "$WORK_DIR/code-investigator.stdout")
 # template-compliance item 5 would otherwise auto-dock the score.
 SEARCH_HINTS_LEN=$(jq '.search_hints | length' "$WORK_DIR/code-investigator.stdout")
 WEB_STATUS="ok"
+# Reason for skipping Web Investigator. Empty when WEB_STATUS=ok.
+# Values: "no_hints" (Code Investigator produced zero search_hints) or
+#         "web_failed" (agent exit != 0 or invalid JSON).
+# Emitted as a WEB_SKIP_REASON sentinel line alongside QUALITY_SCORE so
+# Slack / PR reviewers can see which skip path produced the 80-pt scale.
+WEB_SKIP_REASON=""
 
 if [ "$SEARCH_HINTS_LEN" = "0" ]; then
   WEB_STATUS="skipped"
+  WEB_SKIP_REASON="no_hints"
   echo "=== Web Investigator skipped: no search_hints ===" >&2
   printf '%s' '{"official_docs":[],"similar_issues":[],"constraints":"","migration_notes":"","skipped":"no search hints"}' \
     >"$WORK_DIR/web-investigator.stdout"
@@ -250,6 +280,7 @@ $CODE_OUT"
   if [ "$web_exit" -ne 0 ] || ! validate_json web-investigator '.official_docs and .similar_issues'; then
     echo "=== Web Investigator failed or produced invalid JSON; continuing with empty result ===" >&2
     WEB_STATUS="skipped"
+    WEB_SKIP_REASON="web_failed"
     printf '%s' '{"official_docs":[],"similar_issues":[],"constraints":"","migration_notes":"","skipped":"web investigator failed"}' \
       >"$WORK_DIR/web-investigator.stdout"
   fi
@@ -267,7 +298,7 @@ $COLLECTOR_OUT
 Code Investigator 出力:
 $CODE_OUT
 
-Web Investigator 出力 (web_status=$WEB_STATUS):
+Web Investigator 出力 (web_status=$WEB_STATUS, web_skip_reason=${WEB_SKIP_REASON:-none}):
 $WEB_OUT"
 
 set +e
@@ -281,7 +312,7 @@ if [ "$exit_code" -ne 0 ]; then
 fi
 
 if [ ! -f "${WORKTREE_PATH}/${NOTE_REL_PATH}" ]; then
-  emit_failure synthesizer 11 "investigation note not found at $NOTE_REL_PATH"
+  emit_failure synthesizer 11 "agent returned success but file missing: expected investigation note at $NOTE_REL_PATH"
 fi
 
 # ─── Agent 4: Gatekeeper (initial run) ───────────────────────────
@@ -294,7 +325,7 @@ PASS_THRESHOLD=$(( MAX_SCORE * 70 / 100 ))
 
 NOTE_CONTENT=$(cat "${WORKTREE_PATH}/${NOTE_REL_PATH}")
 
-pipe_prompt gatekeeper "web_status=$WEB_STATUS / max_score=$MAX_SCORE / pass_threshold=$PASS_THRESHOLD
+pipe_prompt gatekeeper "web_status=$WEB_STATUS / web_skip_reason=${WEB_SKIP_REASON:-none} / max_score=$MAX_SCORE / pass_threshold=$PASS_THRESHOLD
 
 以下の調査ノートを採点基準に従って採点し、出力スキーマに沿った JSON のみを返してください。
 
@@ -338,7 +369,7 @@ $COLLECTOR_OUT
 Code Investigator 出力:
 $CODE_OUT
 
-Web Investigator 出力 (web_status=$WEB_STATUS):
+Web Investigator 出力 (web_status=$WEB_STATUS, web_skip_reason=${WEB_SKIP_REASON:-none}):
 $WEB_OUT
 
 現在の調査ノート:
@@ -354,7 +385,7 @@ $NOTE_CONTENT"
   if [ "$rerun_exit" -eq 0 ]; then
     NOTE_CONTENT=$(cat "${WORKTREE_PATH}/${NOTE_REL_PATH}")
 
-    pipe_prompt gatekeeper-rerun "web_status=$WEB_STATUS / max_score=$MAX_SCORE / pass_threshold=$PASS_THRESHOLD (通知用の 2 回目採点、閾値判定は使わない)
+    pipe_prompt gatekeeper-rerun "web_status=$WEB_STATUS / web_skip_reason=${WEB_SKIP_REASON:-none} / max_score=$MAX_SCORE / pass_threshold=$PASS_THRESHOLD (通知用の 2 回目採点、閾値判定は使わない)
 
 以下の調査ノートを採点し、出力スキーマに沿った JSON のみを返してください。
 
@@ -379,13 +410,42 @@ fi
 
 # ─── Commit + push + PR ──────────────────────────────────────────
 
-dc_exec bash -c "cd '$WORKTREE_PATH' && git add '$NOTE_REL_PATH' && git commit -m 'investigate: add investigation note for issue #${ISSUE_NUMBER}' && git push -u origin '$BRANCH'" >&2
+set +e
+dc_exec bash -c "cd '$WORKTREE_PATH' && git add '$NOTE_REL_PATH' && git commit -m 'investigate: add investigation note for issue #${ISSUE_NUMBER}'" \
+  >"$WORK_DIR/git-commit.stdout" 2>"$WORK_DIR/git-commit.stderr"
+commit_exit=$?
+set -e
+if [ "$commit_exit" -ne 0 ]; then
+  emit_failure git-commit "$commit_exit" "git add/commit exit=$commit_exit (possibly no-op commit or staging failure)"
+fi
 
-PR_URL=$(dc_exec gh pr create \
+set +e
+dc_exec bash -c "cd '$WORKTREE_PATH' && git push -u origin '$BRANCH'" \
+  >"$WORK_DIR/git-push.stdout" 2>"$WORK_DIR/git-push.stderr"
+push_exit=$?
+set -e
+if [ "$push_exit" -ne 0 ]; then
+  emit_failure git-push "$push_exit" "git push exit=$push_exit"
+fi
+
+set +e
+dc_exec gh pr create \
   --draft \
   --title "investigate: Issue #${ISSUE_NUMBER} 調査ノート" \
   --body "Closes #${ISSUE_NUMBER}" \
-  --head "$BRANCH" 2>&1 | tail -1)
+  --head "$BRANCH" \
+  >"$WORK_DIR/pr-create.stdout" 2>"$WORK_DIR/pr-create.stderr"
+pr_exit=$?
+set -e
+
+if [ "$pr_exit" -ne 0 ]; then
+  emit_failure pr-create "$pr_exit" "gh pr create exit=$pr_exit"
+fi
+
+PR_URL=$(grep -Eo 'https://github\.com/[^[:space:]]+/pull/[0-9]+' "$WORK_DIR/pr-create.stdout" | tail -1)
+if [ -z "$PR_URL" ]; then
+  emit_failure pr-create 12 "gh pr create succeeded but no PR URL found in stdout"
+fi
 
 # ─── Emit success output ─────────────────────────────────────────
 
@@ -394,6 +454,9 @@ if [ -n "$SCORE" ]; then
 fi
 if [ -n "$SCORE_RERUN" ]; then
   echo "QUALITY_SCORE_RERUN=${SCORE_RERUN}/${MAX_SCORE}"
+fi
+if [ -n "$WEB_SKIP_REASON" ]; then
+  echo "WEB_SKIP_REASON=${WEB_SKIP_REASON}"
 fi
 echo "$PR_URL"
 

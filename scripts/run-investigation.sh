@@ -4,7 +4,7 @@ set -e
 ISSUE_NUMBER="${1:?Usage: run-investigation.sh <issue-number>}"
 PROJECT_PATH="${PROJECT_PATH:?Error: PROJECT_PATH is not set}"
 OP_VAULT_ID="${OP_VAULT_ID:?Error: OP_VAULT_ID is not set}"
-CLAUDE_TIMEOUT_SEC="${CLAUDE_TIMEOUT_SEC:-900}"
+CLAUDE_TIMEOUT_SEC="${CLAUDE_TIMEOUT_SEC:-1020}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # 0. 1Password から Claude OAuth トークンを取得
