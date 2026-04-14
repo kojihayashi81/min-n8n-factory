@@ -10,7 +10,9 @@
 
 ## 品質スコアの通知
 
-成功時の Slack メッセージに Gatekeeper の品質スコアを付記する。スコアが 70 未満で再実行が発生した場合はその旨も記載する。これにより人間は Draft PR を開く前に調査ノートの信頼度を把握できる。採点基準の詳細は [agent_pipeline.md の Gatekeeper 節](./agent_pipeline.md#agent-4-gatekeeper) を参照。
+成功時の Slack メッセージに Gatekeeper の品質スコアを **`X / Y` 形式**（例: `75 / 100`、Web 調査スキップ時は `56 / 80`）で付記する。これにより人間は Draft PR を開く前に調査ノートの信頼度を把握できる。採点基準の詳細は [agent_pipeline.md の Gatekeeper 節](./agent_pipeline.md#agent-4-gatekeeper) を参照。
+
+**再実行ありの場合の表示**: Synthesizer が再実行されたケースでは、Gatekeeper も 2 回走る（2 回目は通知用スコア取得のみ、閾値判定はしない）。このとき Slack メッセージには **「初回 X / Y → 再実行後 X' / Y」** の形式でスコアの変化を表示し、再実行で品質が改善したかが一目でわかるようにする。スコアが改善していない / 悪化しているケースは Gatekeeper プロンプトや Synthesizer プロンプトの改善候補として別途運用ログで拾う。
 
 ## 失敗通知の情報量
 

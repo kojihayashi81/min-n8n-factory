@@ -58,9 +58,10 @@ Run Claude Code (/opt/scripts/n8n-run-claude-pipeline.sh)
 
 ## タイムアウトとリトライ
 
-- **Claude Code タイムアウト**: `CLAUDE_TIMEOUT_SEC`（デフォルト 600秒）。`n8n-run-claude-pipeline.sh` 内で各エージェントの `claude --print` 呼び出しに個別のタイムアウトを設定する。パイプライン全体のタイムアウトは `timeout(1)` で制御し、超過時は現在実行中のエージェントと部分的な出力を stderr に含めて非 0 終了する。エージェントごとの内訳は [agent_pipeline.md のエージェントごとのタイムアウト](./agent_pipeline.md#エージェントごとのタイムアウト) を参照
-- **ワークフロー実行タイムアウト**: `WORKFLOW_TIMEOUT_SEC`（デフォルト 780秒 = `CLAUDE_TIMEOUT_SEC` + Slack/GitHub API + devcontainer 起動バッファ 180秒）。n8n の `EXECUTIONS_TIMEOUT` に設定される
-- **スタック判定しきい値**: `STUCK_THRESHOLD_SEC`（デフォルト 1200秒）。`WORKFLOW_TIMEOUT_SEC` と同値にすると「ギリギリ終わったジョブがスタック扱いされる」境界競合が起きるため、`WORKFLOW_TIMEOUT_SEC` の約 1.5 倍を持たせる
+- **Claude Code タイムアウト**: `CLAUDE_TIMEOUT_SEC`（デフォルト 900 秒）。`n8n-run-claude-pipeline.sh` 内で各エージェントの `claude --print` 呼び出しに個別のタイムアウトを設定する。パイプライン全体のタイムアウトは `timeout(1)` で制御し、超過時は現在実行中のエージェントと部分的な出力を stderr に含めて非 0 終了する。エージェントごとの内訳は [agent_pipeline.md のエージェントごとのタイムアウト](./agent_pipeline.md#エージェントごとのタイムアウト) を参照
+- **ワークフロー実行タイムアウト**: `WORKFLOW_TIMEOUT_SEC`（デフォルト 1080 秒 = `CLAUDE_TIMEOUT_SEC` + Slack/GitHub API + devcontainer 起動バッファ 180 秒）。n8n の `EXECUTIONS_TIMEOUT` に設定される
+- **スタック判定しきい値**: `STUCK_THRESHOLD_SEC`（デフォルト 1620 秒 = `WORKFLOW_TIMEOUT_SEC` × 1.5）。`WORKFLOW_TIMEOUT_SEC` と同値にすると「ギリギリ終わったジョブがスタック扱いされる」境界競合が起きるため約 1.5 倍を持たせる
+- **タイムアウト予算の不変条件**: **「各エージェントの個別タイムアウトの合計 < パイプライン全体タイムアウト（`CLAUDE_TIMEOUT_SEC`）」** を必ず守る。合計がオーバーすると、後段のエージェント（特に Gatekeeper）が個別タイムアウトに達する前にパイプライン全体タイムアウトで打ち切られ、調査ノートができても品質チェックが走らないという壊れ方をする。現在の内訳は再実行ありで `60 + 300 + 120 + 180 + 60 + 180 + 60 = 960` 秒程度になる想定だが、デフォルト 900 秒でもギリギリなのでエージェントを増やす場合は `CLAUDE_TIMEOUT_SEC` も一緒に引き上げる
 - **リトライ**: 失敗 Issue には `ai-failed` が付く。人間が `ai-ready` に戻せば次回のスキャンで再実行される。Slack スレッドは初回実行時のものが `$getWorkflowStaticData` 経由で再利用される
 - **スタック検知**: 何らかの理由で `ai-processing` のまま残った Issue は [ai-stuck-cleanup](../ai-stuck-cleanup.md) が回収する
 - **親メッセージ投稿失敗時**: `Slack: 処理開始` は `onError` を設定しておらず、失敗するとワークフロー全体が停止する（`ai-processing` ラベルが残り、`STUCK_THRESHOLD_SEC` 経過後に ai-stuck-cleanup が `ai-failed` に回収）。この方針は「1 Issue = 1 スレッド」の不変条件を守るため
