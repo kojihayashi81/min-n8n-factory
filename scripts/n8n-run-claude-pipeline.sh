@@ -5,9 +5,10 @@
 #   /opt/scripts/n8n-run-claude-pipeline.sh <issue-number>
 #
 # 成功時 stdout:
-#   QUALITY_SCORE=<score>/<max>               (Gatekeeper が走った場合)
-#   QUALITY_SCORE_RERUN=<score>/<max>         (Synthesizer 再実行後のみ)
-#   https://github.com/<owner>/<repo>/pull/<n>  (作成した Draft PR の URL)
+#   QUALITY_SCORE=<score>/<max>                  (Gatekeeper が走った場合)
+#   QUALITY_SCORE_RERUN=<score>/<max>            (Synthesizer 再実行後のみ)
+#   WEB_SKIP_REASON=<no_hints|web_failed>        (Web 調査がスキップされた場合のみ)
+#   https://github.com/<owner>/<repo>/pull/<n>   (作成した Draft PR の URL)
 #
 # 失敗時: 非 0 終了 + stderr に失敗エージェント名 / stdout / stderr をデリミタ付きで出力
 #

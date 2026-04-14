@@ -1,34 +1,52 @@
 # AI Issue Processor アーキテクチャ
 
+本ドキュメントは `ai-issue-processor` ワークフローの全体像と、DevContainer + Worktree + 4 段エージェントパイプラインという構成を採った理由をまとめる。n8n 側のノード構成・失敗通知・タイムアウト設計などの詳細は [docs/workflows/ai-issue-processor/](../workflows/ai-issue-processor/) 配下を参照。
+
 ## 全体フロー
 
 ```text
 n8n (Docker コンテナ)
-  │ 10分ごとに ai-ready ラベルの Issue をポーリング
+  │ 10 分ごとに ai-ready ラベルの Issue をポーリング
   │
   ├─ Issue あり
   │   ├─ 1. ai-processing ラベルを付与
-  │   ├─ 2. ホストの対象リポジトリに git worktree を作成
-  │   ├─ 3. worktree 上で DevContainer を起動
-  │   ├─ 4. DevContainer 内で claude --print "/investigate {number}" を実行
-  │   ├─ 5. 調査結果を Markdown で保存・コミット・PR 作成
-  │   └─ 6. Issue にコメント投稿 → ai-investigated ラベル付与
+  │   ├─ 2. n8n-run-claude-pipeline.sh <issue-number> を executeCommand で呼び出し
+  │   │     ├─ 2a. create-worktree.sh      → ホストに git worktree を作成（冪等）
+  │   │     ├─ 2b. start-devcontainer.sh   → worktree 上で DevContainer を起動（冪等）
+  │   │     └─ 2c. DevContainer 内で 4 段エージェントパイプラインを順次実行
+  │   │          Collector → Code Investigator → Web Investigator
+  │   │          → Synthesizer → Gatekeeper
+  │   │          （Gatekeeper fail 時のみ Synthesizer / Gatekeeper rerun）
+  │   ├─ 3. シェル側で git commit + push + gh pr create を実行
+  │   ├─ 4. cleanup-worktree.sh で worktree / DevContainer を片付け（成功時のみ）
+  │   └─ 5. Issue に PR URL をコメント投稿 → ai-investigated ラベル付与
   │
   └─ Issue なし → 何もしない
+
+失敗時:
+  → Set ai-failed label
+  → Post Error Comment（失敗エージェント名 + 秘匿スクラブ済みエラー本文）
+  → Slack に失敗通知（スレッド返信 + チャンネル再露出）
+  → worktree は調査用に残す（ai-stuck-cleanup が後で回収）
 ```
 
 ---
 
-## なぜ DevContainer + Worktree なのか
+## なぜ DevContainer + Worktree + 4 段パイプラインなのか
 
 ### 選択の経緯
 
 | 案                                  | 問題点                                                                              |
 | ----------------------------------- | ----------------------------------------------------------------------------------- |
-| ホストで直接実行                    | ホストに Claude Code・gh CLI をグローバルインストールが必要                         |
+| ホストで直接実行                    | ホストに Claude Code / gh CLI をグローバルインストールが必要                        |
 | SSH 経由でホスト実行                | macOS リモートログイン設定・鍵管理が煩雑。`:ro` マウントで known_hosts 書き込み不可 |
 | 専用コンテナ（claude-runner）       | 開発者の環境と AI の環境が乖離する                                                  |
 | **DevContainer + Worktree（採用）** | 開発者と同じ環境で AI が動く・並列実行可能・ホストを汚染しない                      |
+
+| 調査方式                                 | 問題点                                                                              |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| 単発 `claude --print /investigate {N}`   | 1 プロセスに全部詰めるのでコンテキスト汚染・長時間化・部分失敗の扱いが雑になる      |
+| **4 段エージェントパイプライン（採用）** | 役割ごとに context を絞り、品質を Gatekeeper で自動採点し、失敗の粒度を細かく取れる |
 
 ### DevContainer のメリット
 
@@ -42,36 +60,54 @@ n8n (Docker コンテナ)
 - 高速: `.git` を共有するためクローン不要
 - 省ディスク: ソースコードのコピーのみ
 
+### 4 段エージェントパイプラインのメリット
+
+- **コンテキスト分離**: 各 agent は独立した `claude --print` 呼び出しなので、前段の試行錯誤が後段の context を食い潰さない
+- **役割特化**: Collector は Issue 解析、Code Investigator はコードベース探索、Web Investigator は外部情報調査、Synthesizer は統合と Markdown 生成、Gatekeeper は品質採点 — それぞれシステムプロンプトで許可ツールを絞り込める
+- **品質の自動ゲート**: Gatekeeper が 100 点満点（Web 調査スキップ時は 80 点満点）で採点し、pass 閾値未満なら Synthesizer を feedback 付きで 1 回だけ再実行する
+- **失敗の粒度**: パイプライン側で各 agent の exit code / stdout / stderr を個別に捕捉し、失敗通知で「どの agent でどんな内容を出して落ちたか」を Slack / GitHub コメントに秘匿スクラブ済みで流せる
+- **決定論的な git 操作**: commit / push / PR 作成はシェルから実行するので、LLM の揺らぎの影響を受けない
+
 ---
 
 ## コンポーネント構成
 
 ```text
 min-n8n-factory/
-├── docker-compose.yml          # n8n サービス（Docker socket マウント）
+├── docker-compose.yml              # n8n サービス（docker socket / scripts / prompts マウント）
+├── Dockerfile.n8n                  # n8n + docker CLI + git + jq + devcontainer CLI
 ├── scripts/
-│   ├── create-worktree.sh      # worktree 作成（冪等）
-│   ├── start-devcontainer.sh   # DevContainer 起動（冪等）
-│   ├── import-workflow.sh      # ワークフロー インポート（冪等）
-│   ├── setup-labels.sh         # ラベル配布
-│   ├── setup-issue-template.sh # Issue テンプレート配布
-│   ├── setup-skills.sh         # Claude Skills 配布
-│   └── setup-devcontainer.sh   # DevContainer 設定配布
+│   ├── n8n-run-claude-pipeline.sh  # 4 段パイプラインのエントリポイント
+│   ├── create-worktree.sh          # worktree 作成（冪等）
+│   ├── start-devcontainer.sh       # DevContainer 起動（冪等）
+│   ├── cleanup-worktree.sh         # worktree / DevContainer 片付け
+│   ├── import-workflow.sh          # ワークフローインポート（冪等）
+│   ├── setup-labels.sh             # ラベル配布
+│   ├── setup-issue-template.sh     # Issue テンプレート配布
+│   ├── setup-skills.sh             # Claude Skills 配布
+│   ├── setup-devcontainer.sh       # DevContainer 設定配布
+│   └── slack-notify-pkg/           # n8n Code ノードが require する Slack 通知ロジック
+├── prompts/
+│   └── agents/                     # 4 段パイプラインの system prompt 5 本
+│       ├── collector.md
+│       ├── code-investigator.md
+│       ├── web-investigator.md
+│       ├── synthesizer.md
+│       └── gatekeeper.md
 ├── templates/
-│   ├── devcontainer/           # DevContainer テンプレート
-│   │   ├── Dockerfile          # Claude Code + gh CLI + Node.js
-│   │   └── devcontainer.json
-│   ├── skills/                 # Claude Skills テンプレート
-│   └── scripts/                # 対象リポジトリ用スクリプト
+│   ├── devcontainer/               # DevContainer テンプレート（Dockerfile / devcontainer.json）
+│   ├── skills/                     # Claude Skills テンプレート
+│   └── scripts/                    # 対象リポジトリ用スクリプト
 └── workflows/
-    └── ai-issue-processor.json # n8n ワークフロー定義
+    ├── ai-issue-processor.json     # n8n メインワークフロー定義
+    └── ai-stuck-cleanup.json       # stuck Issue 回収ワークフロー
 
 対象リポジトリ（例: gomoku-nextjs）
-├── .devcontainer/              # setup-devcontainer で配布済み
-├── .claude/skills/             # setup-skills で配布済み
-├── .worktrees/                 # .gitignore に追加
-│   ├── issue-2/                # Issue #2 用の作業コピー
-│   └── issue-5/                # Issue #5 用の作業コピー（並列実行時）
+├── .devcontainer/                  # setup-devcontainer で配布済み
+├── .claude/skills/                 # setup-skills で配布済み
+├── .worktrees/                     # .gitignore に追加
+│   ├── issue-2/                    # Issue #2 用の作業コピー
+│   └── issue-5/                    # Issue #5 用の作業コピー（並列実行時）
 └── src/
 ```
 
@@ -79,33 +115,45 @@ min-n8n-factory/
 
 ## 各スクリプトの役割
 
+### n8n-run-claude-pipeline.sh
+
+4 段エージェントパイプラインのエントリポイント。n8n の `Run Claude Code`（ExecuteCommand）ノードから `/opt/scripts/n8n-run-claude-pipeline.sh <issue-number>` で呼ばれる。
+
+- positive integer バリデーション、タイムアウト予算の不変条件 runtime check
+- `create-worktree.sh` / `start-devcontainer.sh` の順に呼び出し、以降は `dc_exec`（= `devcontainer exec`）経由で各 agent を順次実行
+- agent ごとに stdout / stderr / exit code を個別 temp file にキャプチャし、`jq -e` でスキーマ検証
+- `search_hints` が空なら Web Investigator をスキップし 80 点満点に切り替え。Web Investigator が失敗したケースも同様にスキップ扱いとし、`WEB_SKIP_REASON=no_hints|web_failed` を stdout に emit
+- Gatekeeper の `.pass` はシェル側で `SCORE >= PASS_THRESHOLD` に再計算（agent のハルシネーション対策）
+- 低スコア時のみ Synthesizer と Gatekeeper を 1 回だけ rerun し、通知用に `QUALITY_SCORE_RERUN=X/Y` も stdout に emit
+- 成功時のみ `cleanup-worktree.sh` を呼ぶ。失敗時は worktree を残して調査可能にする
+- 失敗時は `=== pipeline failed at agent=<name> (exit=<N>, reason=<text>) ===` デリミタ付きで stderr に出力し、n8n 側の `resolveFailureError` → `scrubSecrets` 経路に合流する
+
 ### create-worktree.sh
 
 ```bash
-# 使い方
 PROJECT_PATH=/path/to/repo bash scripts/create-worktree.sh <issue-number>
-
-# 出力: worktree のパス（stdout）
-/path/to/repo/.worktrees/issue-42
+# stdout: /path/to/repo/.worktrees/issue-42
 ```
 
-- `main` ブランチから `issues/{number}` ブランチを作成
+- `origin/main` を起点に `issues/{number}` ブランチを作成
 - 既に worktree が存在する場合はパスだけ返す（冪等）
 - リモートにブランチがあればそれをチェックアウト
 
 ### start-devcontainer.sh
 
 ```bash
-# 使い方
 bash scripts/start-devcontainer.sh <worktree-path>
-
-# 出力: コンテナ ID（stdout）
-d151d705f073...
+# stdout: d151d705f073...  (コンテナ ID)
 ```
 
-- `devcontainer up` で DevContainer を起動
+- `devcontainer up --workspace-folder <worktree-path>` で DevContainer を起動
 - 既に起動済みなら再利用（冪等）
-- 初回はイメージビルドが発生（2回目以降はキャッシュ利用）
+- 初回はイメージビルドが発生（2 回目以降はキャッシュ利用）
+
+### cleanup-worktree.sh
+
+- DevContainer を停止し、worktree を削除
+- パイプラインが成功したときだけ呼ばれる。失敗時は意図的に worktree を残す
 
 ---
 
@@ -115,7 +163,7 @@ d151d705f073...
 
 `CLAUDE_CODE_OAUTH_TOKEN` 環境変数で認証する。API キーは不要。
 
-- `claude setup-token` で1年間有効な OAuth トークンを生成（[公式ドキュメント](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token)）
+- `claude setup-token` で 1 年間有効な OAuth トークンを生成（[公式ドキュメント](https://code.claude.com/docs/en/authentication#generate-a-long-lived-token)）
 - トークンは `.env` に保存 → `docker-compose.yml` で n8n コンテナに渡す → `devcontainer.json` の `remoteEnv` + `${localEnv:...}` で DevContainer に渡る
 - Max プランの OAuth トークンは macOS キーチェーンに保存されるため、ファイルマウント方式ではコンテナに渡せない。環境変数方式を採用（[環境変数リファレンス](https://code.claude.com/docs/en/env-vars)）
 
@@ -132,7 +180,7 @@ CLAUDE_CODE_OAUTH_TOKEN=<生成されたトークン>
 ### GitHub
 
 - **n8n GitHub ノード用**: Fine-grained PAT を n8n Credentials に登録（暗号化保存）
-- **DevContainer 内の gh CLI 用**: `GH_TOKEN` 環境変数で渡す（`devcontainer.json` の `remoteEnv`）
+- **DevContainer 内の gh / git 用**: `GH_TOKEN` 環境変数で渡す（`devcontainer.json` の `remoteEnv`）。パイプラインスクリプトの commit / push / `gh pr create` でも同じトークンを使う
 - **n8n コンテナ内の git fetch 用**: `GH_TOKEN` で SSH → HTTPS 変換（`git config url.insteadOf`）
 
 ---
@@ -144,23 +192,28 @@ Schedule 10min
   → Get oldest ai-ready Issue（Repository → Get Issues + ラベルフィルタ）
   → If（Issue が存在するか: !!$json.number）
   → Set ai-processing label
-  → Run Claude Code（create-worktree → start-devcontainer → devcontainer exec claude）
+  → Slack: 処理開始（親メッセージ、以降はすべてスレッド返信）
+  → Run Claude Code（/opt/scripts/n8n-run-claude-pipeline.sh {N} を executeCommand）
   → Post PR Link to Issue
   → Set ai-investigated label
+  → Slack: 調査完了（品質スコア付き、reply_broadcast=true）
 
 エラー時:
   → Set ai-failed label
-  → Post Error Comment
+  → Build failure payload（resolveFailureError → scrubSecrets）
+  → Post Error Comment（GitHub Issue）
+  → Slack: 処理失敗（スレッド返信 + reply_broadcast=true）
 ```
+
+- ノードの役割一覧は [workflows/ai-issue-processor/flow.md](../workflows/ai-issue-processor/flow.md)
+- Slack 通知の設計は [workflows/ai-issue-processor/slack.md](../workflows/ai-issue-processor/slack.md)
+- 4 段パイプラインの JSON スキーマ / 採点基準 / 再実行ポリシー / コスト構造は [workflows/ai-issue-processor/agent_pipeline.md](../workflows/ai-issue-processor/agent_pipeline.md)
 
 ---
 
-## 動作確認済みステップ
+## 関連ドキュメント
 
-| #   | ステップ                      | 状態     | 確認内容                                                  |
-| --- | ----------------------------- | -------- | --------------------------------------------------------- |
-| 1   | worktree 作成                 | 確認済み | `create-worktree.sh` で冪等に worktree 作成・パス返却     |
-| 2   | DevContainer 起動             | 確認済み | `start-devcontainer.sh` で冪等にコンテナ起動・ID 返却     |
-| 3   | DevContainer 内で claude 実行 | 未着手   | `~/.claude` マウント + `devcontainer exec claude --print` |
-| 4   | n8n ワークフロー統合          | 未着手   | Run Claude Code ノードからスクリプトを呼び出す            |
-| 5   | E2E 動作確認                  | 未着手   | ai-ready Issue → 調査 → PR 作成 → コメント投稿            |
+- [env-flow.md](env-flow.md) — 環境変数とトークンフロー、docker-compose.yml のマウント / 環境変数、パス規約の不変条件
+- [run-claude-design.md](run-claude-design.md) — `claude --print` 実行方式の検討経緯と失敗モード
+- [setup-devcontainer.md](setup-devcontainer.md) — 対象リポジトリへの DevContainer 配布手順
+- [references.md](references.md) — 外部参考リンク集
