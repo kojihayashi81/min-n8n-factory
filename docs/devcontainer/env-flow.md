@@ -115,12 +115,15 @@
 
 ### docker-compose.yml の変更点
 
-| 追加項目                                 | 目的                                                                  |
-| ---------------------------------------- | --------------------------------------------------------------------- |
-| カスタムイメージ（`n8nio/n8n` の代わり） | n8n + docker CLI + git + devcontainer CLI                             |
-| `/var/run/docker.sock` ボリューム        | n8n コンテナからホストの Docker を操作                                |
-| `PROJECT_PATH` ボリューム（bind mount）  | n8n コンテナから対象リポジトリにアクセスし worktree を作成            |
-| `CLAUDE_CODE_OAUTH_TOKEN` 環境変数       | n8n コンテナの shell を経由して DevContainer に `localEnv` で渡される |
+| 追加項目                                      | 目的                                                                                                                                    |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| カスタムイメージ（`n8nio/n8n` の代わり）      | n8n + docker CLI + git + devcontainer CLI                                                                                               |
+| `/var/run/docker.sock` ボリューム             | n8n コンテナからホストの Docker を操作                                                                                                  |
+| `PROJECT_PATH` ボリューム（bind mount）       | n8n コンテナから対象リポジトリにアクセスし worktree を作成                                                                              |
+| `./scripts:/opt/scripts:ro`                   | n8n コンテナからパイプラインスクリプト / ヘルパーを実行                                                                                 |
+| `./prompts:/opt/prompts:ro`                   | `n8n-run-claude-pipeline.sh` が `$SCRIPT_DIR/../prompts/agents` → `/opt/prompts/agents` で agent system prompt 5 本を読み込む。必須依存 |
+| `./scripts/slack-notify-pkg` → NODE_PATH 配下 | n8n Code ノードから `require('slack-notify')` を解決する                                                                                |
+| `CLAUDE_CODE_OAUTH_TOKEN` 環境変数            | n8n コンテナの shell を経由して DevContainer に `localEnv` で渡される                                                                   |
 
 ### 対象リポジトリ（setup スクリプトで事前配布）
 
@@ -156,6 +159,14 @@
     （エラー時）    ai-failed ラベルを付与 + エラーコメント投稿
                    （worktree は調査用に残す）
 ```
+
+## パス規約の不変条件
+
+`n8n-run-claude-pipeline.sh` は次の 3 つのパス規約に暗黙的に依存している。対象リポジトリの `.devcontainer/devcontainer.json` でこれらを上書きすると壊れる。
+
+- **n8n コンテナ内の prompts 配置**: `./prompts` が `/opt/prompts:ro` に bind mount される。スクリプトは `$SCRIPT_DIR/../prompts/agents` → `/opt/prompts/agents` から system prompt を読む。マウント欠落時は最初の `run_agent` が file-exists チェックで即失敗する
+- **devcontainer の workspaceFolder**: `devcontainer exec --workspace-folder "$WORKTREE_PATH"` が起動するコマンドのデフォルト CWD は、devcontainer.json の `workspaceFolder`（デフォルト `/workspaces/<basename of WORKTREE_PATH>`）。パイプラインはこの CWD で `git add` / `git commit` / `git push` / `gh issue view` / `gh pr create` を実行するため、明示的な `cd` は入れていない（入れると `$WORKTREE_PATH` がホストパスでコンテナ内に存在せず失敗する）
+- **Synthesizer の Write パス**: `NOTE_PATH_IN_CONTAINER=/workspaces/$(basename "$WORKTREE_PATH")/<note>` を明示的に組み立てて Claude に渡す。この path は devcontainer の workspaceFolder と一致している必要がある。対象リポジトリ側で `workspaceFolder` を `/workspace` や別 path に変えた場合は、このスクリプトの path 生成ロジックも併せて直す
 
 ## トークン・認証の一覧
 

@@ -166,11 +166,13 @@ emit_failure() {
   local reason=$3
 
   echo "=== pipeline failed at agent=$name (exit=$exit_code, reason=$reason) ===" >&2
-  if [ -f "$WORK_DIR/${name}.stdout" ]; then
+  # -s: only print header when the file exists AND is non-empty, so
+  # empty captures don't add noise to Slack / GitHub comments.
+  if [ -s "$WORK_DIR/${name}.stdout" ]; then
     echo "--- ${name} stdout ---" >&2
     cat "$WORK_DIR/${name}.stdout" >&2
   fi
-  if [ -f "$WORK_DIR/${name}.stderr" ]; then
+  if [ -s "$WORK_DIR/${name}.stderr" ]; then
     echo "--- ${name} stderr ---" >&2
     cat "$WORK_DIR/${name}.stderr" >&2
   fi
@@ -236,8 +238,8 @@ set -e
 if [ "$exit_code" -ne 0 ]; then
   emit_failure code-investigator "$exit_code" "claude exit=$exit_code"
 fi
-if ! validate_json code-investigator '.related_files and .tech_stack and .current_behavior and .impact_scope and .search_hints'; then
-  emit_failure code-investigator 10 "invalid JSON or missing required keys"
+if ! validate_json code-investigator '.related_files and .tech_stack and .current_behavior and .impact_scope and (.search_hints | type == "array")'; then
+  emit_failure code-investigator 10 "invalid JSON, missing required keys, or search_hints is not an array"
 fi
 
 CODE_OUT=$(cat "$WORK_DIR/code-investigator.stdout")
@@ -343,11 +345,19 @@ run_agent gatekeeper "$AGENT_TIMEOUT_GATEKEEPER" "" "$PROMPTS_DIR/gatekeeper.md"
 gate_exit=$?
 set -e
 
-if [ "$gate_exit" -eq 0 ] && validate_json gatekeeper '.score and (.pass != null)'; then
+# Pass判定は shell 側で決定論的に行う。Gatekeeper の `.pass` フィールドは
+# プロンプトに threshold を渡している都合上 agent が自分で埋めるが、
+# ハルシネーションで score < threshold なのに pass=true と返すケースを
+# 防ぐため、ここでは SCORE と PASS_THRESHOLD の数値比較に寄せる。
+if [ "$gate_exit" -eq 0 ] && validate_json gatekeeper '(.score | type == "number")'; then
   GATEKEEPER_OK=true
   SCORE=$(jq -r '.score' "$WORK_DIR/gatekeeper.stdout")
-  PASS=$(jq -r '.pass' "$WORK_DIR/gatekeeper.stdout")
   FEEDBACK=$(jq -r '.feedback // ""' "$WORK_DIR/gatekeeper.stdout")
+  if [ "$SCORE" -ge "$PASS_THRESHOLD" ]; then
+    PASS=true
+  else
+    PASS=false
+  fi
 else
   echo "=== Gatekeeper failed or produced invalid JSON; continuing without score ===" >&2
 fi
@@ -431,6 +441,7 @@ fi
 set +e
 dc_exec gh pr create \
   --draft \
+  --base main \
   --title "investigate: Issue #${ISSUE_NUMBER} 調査ノート" \
   --body "Closes #${ISSUE_NUMBER}" \
   --head "$BRANCH" \
