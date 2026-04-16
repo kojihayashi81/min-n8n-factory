@@ -16,7 +16,10 @@
       "name": "Schedule 30min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [112, 300]
+      "position": [
+        112,
+        300
+      ]
     },
     {
       "parameters": {
@@ -33,7 +36,10 @@
       "name": "Get ai-processing Issues",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [332, 300],
+      "position": [
+        332,
+        300
+      ],
       "credentials": {}
     },
     {
@@ -62,7 +68,10 @@
       "name": "Stale? (updated_at > TIMEOUT)",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [552, 300],
+      "position": [
+        552,
+        300
+      ],
       "notes": "最終更新からタイムアウト秒数以上経過した Issue をスタックと判定"
     },
     {
@@ -73,14 +82,21 @@
         "repository": "={{ $env.GITHUB_REPO.split('/')[1] }}",
         "issueNumber": "={{ $json.number }}",
         "editFields": {
-          "labels": [{"label": "ai-failed"}]
+          "labels": [
+            {
+              "label": "ai-failed"
+            }
+          ]
         }
       },
       "id": "node-label-failed",
       "name": "Set ai-failed label",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [772, 200],
+      "position": [
+        772,
+        200
+      ],
       "credentials": {}
     },
     {
@@ -96,16 +112,28 @@
       "name": "Post Stuck Comment",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
-      "position": [992, 200],
+      "position": [
+        992,
+        200
+      ],
       "credentials": {}
     },
     {
       "parameters": {
         "fieldsToAggregate": {
           "fieldToAggregate": [
-            {"fieldToAggregate": "number", "renameField": false},
-            {"fieldToAggregate": "title", "renameField": false},
-            {"fieldToAggregate": "updated_at", "renameField": false}
+            {
+              "fieldToAggregate": "number",
+              "renameField": false
+            },
+            {
+              "fieldToAggregate": "title",
+              "renameField": false
+            },
+            {
+              "fieldToAggregate": "updated_at",
+              "renameField": false
+            }
           ]
         },
         "options": {
@@ -116,7 +144,10 @@
       "name": "Aggregate Stuck Issues",
       "type": "n8n-nodes-base.aggregate",
       "typeVersion": 1,
-      "position": [1212, 200],
+      "position": [
+        1212,
+        200
+      ],
       "notes": "スタック検知済み Issue を1件にまとめてバッチ通知用に集約"
     },
     {
@@ -127,7 +158,10 @@
       "name": "Build stuck-batch payload",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1432, 200],
+      "position": [
+        1432,
+        200
+      ],
       "notes": "集約済み Issue リストから Block Kit バッチ通知を組み立てる"
     },
     {
@@ -156,7 +190,10 @@
       "name": "Slack: スタック検知 (一括)",
       "type": "n8n-nodes-base.slack",
       "typeVersion": 2.3,
-      "position": [1652, 200],
+      "position": [
+        1652,
+        200
+      ],
       "onError": "continueRegularOutput",
       "credentials": {
         "slackApi": {
@@ -169,38 +206,80 @@
   "connections": {
     "Schedule 30min": {
       "main": [
-        [{"node": "Get ai-processing Issues", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Get ai-processing Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Get ai-processing Issues": {
       "main": [
-        [{"node": "Stale? (updated_at > TIMEOUT)", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Stale? (updated_at > TIMEOUT)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Stale? (updated_at > TIMEOUT)": {
       "main": [
-        [{"node": "Set ai-failed label", "type": "main", "index": 0}],
+        [
+          {
+            "node": "Set ai-failed label",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
     "Set ai-failed label": {
       "main": [
-        [{"node": "Post Stuck Comment", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Post Stuck Comment",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Post Stuck Comment": {
       "main": [
-        [{"node": "Aggregate Stuck Issues", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Aggregate Stuck Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Aggregate Stuck Issues": {
       "main": [
-        [{"node": "Build stuck-batch payload", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Build stuck-batch payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Build stuck-batch payload": {
       "main": [
-        [{"node": "Slack: スタック検知 (一括)", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Slack: スタック検知 (一括)",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
