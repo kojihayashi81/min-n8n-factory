@@ -610,6 +610,8 @@ else
       if [ -n "$RETRY_PR_URL" ]; then
         echo "=== pr-create: recovered existing PR $RETRY_PR_URL ===" >&2
         PR_URL="$RETRY_PR_URL"
+      elif [ "$retry_exit" -eq 0 ]; then
+        emit_failure pr-create "$pr_exit" "gh pr create said 'already exists' but gh pr list retry returned no open PR (branch may have been merged/closed)"
       else
         emit_failure pr-create "$pr_exit" "gh pr create said 'already exists' but gh pr list retry also failed (exit=$retry_exit)"
       fi
