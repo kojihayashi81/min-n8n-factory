@@ -12,7 +12,7 @@
 
 成功時の Slack メッセージに Gatekeeper の品質スコアを **`X / Y` 形式**（例: `75 / 100`、Web 調査スキップ時は `56 / 80`）で付記する。これにより人間は Draft PR を開く前に調査ノートの信頼度を把握できる。採点基準の詳細は [agent_pipeline.md の Gatekeeper 節](./agent_pipeline.md#agent-4-gatekeeper) を参照。
 
-**Web 調査スキップ時の理由表示**: 80 点満点換算になるケースには、パイプラインが `WEB_SKIP_REASON` センチネル行（`no_hints` または `web_failed`）を stdout に出し、`slack-notify-pkg` の `extractWebSkipReason` がそれを拾って Slack 本文に理由を添える。表示は **`64 / 80（Web 調査スキップ: 検索ヒントなし、80 点満点換算）`** または **`64 / 80（Web 調査スキップ: Web 調査失敗、80 点満点換算）`**。これにより、80 点満点の根拠が「Code Investigator が `search_hints` を出せなかった構造的理由」なのか「Web Investigator が実行時に失敗した一時的理由」なのかを運用ログで切り分けられる（再試行ポリシーの判断材料になる）。`WEB_SKIP_REASON` 行が欠けている場合は理由ラベルなしで従来どおり `（Web 調査スキップ、80 点満点換算）` にフォールバックする。
+**Web 調査スキップ時の理由表示**: 80 点満点換算になるケースには、パイプラインが `WEB_SKIP_REASON` センチネル行（`no_hints` または `web_failed`）を stdout に出し、`slack-notify-pkg` の `extractWebSkipReason` がそれを拾って Slack 本文に理由を添える。表示は **`64 / 80（検索ヒントなしによりスキップ、80 点満点換算）`** または **`64 / 80（Web 調査が失敗したためスキップ、80 点満点換算）`**。これにより、80 点満点の根拠が「Code Investigator が `search_hints` を出せなかった構造的理由」なのか「Web Investigator が実行時に失敗した一時的理由」なのかを運用ログで切り分けられる（再試行ポリシーの判断材料になる）。`WEB_SKIP_REASON` 行が欠けている場合は理由ラベルなしで従来どおり `（Web 調査スキップ、80 点満点換算）` にフォールバックする。
 
 **再実行ありの場合の表示**: Synthesizer が再実行されたケースでは、Gatekeeper も 2 回走る（2 回目は通知用スコア取得のみ、閾値判定はしない）。このとき Slack メッセージには **「初回 X / Y → 再実行後 X' / Y」** の形式でスコアの変化を表示し、再実行で品質が改善したかが一目でわかるようにする。スコアが改善していない / 悪化しているケースは Gatekeeper プロンプトや Synthesizer プロンプトの改善候補として別途運用ログで拾う。
 
