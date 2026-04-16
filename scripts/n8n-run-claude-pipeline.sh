@@ -143,12 +143,13 @@ run_agent() {
   local system_prompt
   system_prompt=$(cat "$system_prompt_file")
 
-  # Build the claude command. --output-format text keeps stdout as the raw
-  # assistant response so we can feed it straight into jq (no session meta).
+  # Build the claude command. --output-format json wraps the response in a
+  # structured envelope ({ "result": "...", ... }) so validate_json can
+  # extract .result with jq — no fragile text-scraping needed.
   local -a claude_args=(
     claude
     --print
-    --output-format text
+    --output-format json
     --dangerously-skip-permissions
     --append-system-prompt
     "$system_prompt"
@@ -186,18 +187,13 @@ run_agent() {
   return "$exit_code"
 }
 
-# validate_json: check that an agent's stdout is valid JSON and contains
+# validate_json: extract .result from the CLI JSON envelope and verify
 # the required top-level keys.
 #
-# Claude occasionally ignores "JSON only" prompt constraints and prepends
-# a natural-language preamble like "I have sufficient data. Let me compile
-# the final output." before the actual JSON, which previously caused jq
-# to reject the whole response and the agent was marked as failed. Guard
-# against that by first extracting the largest balanced `{...}` block from
-# stdout (ignoring any surrounding prose) and overwriting the stdout file
-# with the cleaned JSON. The original is preserved alongside as
-# <name>.stdout.raw so emit_failure / skip diagnostics can still show the
-# full claude response on parse failures.
+# --output-format json wraps Claude's response in { "result": "...", ... }.
+# We extract .result, parse it as JSON, and check the schema — no fragile
+# balanced-brace scanning needed.  The original CLI envelope is preserved
+# as <name>.stdout.raw for diagnostics.
 #
 # Args:
 #   $1 = agent name (must match run_agent call)
@@ -209,23 +205,23 @@ validate_json() {
   local required=$2
   local file="$WORK_DIR/${name}.stdout"
 
-  # Keep the original response on disk (once) so diagnostics still have
-  # the full context after we rewrite $file with the cleaned JSON.
+  # Keep the original CLI envelope on disk for diagnostics.
   if [ ! -f "$file.raw" ]; then
     cp "$file" "$file.raw" 2>/dev/null || true
   fi
 
-  # Extract the best balanced JSON object from the raw response.
-  # The extraction logic lives in extract-balanced-json.js (unit-tested)
-  # and picks the longest valid JSON block, preferring ```json fences and
-  # later positions — so a small example in the preamble won't shadow the
-  # real payload.  node is always available inside the n8n container.
-  local extractor
-  extractor="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/extract-balanced-json.js"
-  if ! node "$extractor" "$file.raw" "$file" 2>/dev/null; then
+  # Extract .result from the CLI envelope and parse it as JSON.
+  # If Claude added preamble text, .result won't be valid JSON and this fails
+  # explicitly — which is the correct behavior (retry rather than guess).
+  local result
+  result=$(jq -r '.result' "$file.raw" 2>/dev/null) || return 1
+
+  # Validate that .result is itself valid JSON and write the cleaned output.
+  if ! printf '%s' "$result" | jq -e '.' >"$file" 2>/dev/null; then
     return 1
   fi
 
+  # Check required schema keys.
   if ! jq -e "$required" "$file" >/dev/null 2>&1; then
     return 1
   fi
