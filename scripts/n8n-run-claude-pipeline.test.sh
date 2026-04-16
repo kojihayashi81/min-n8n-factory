@@ -38,19 +38,12 @@ assert_file_content() {
   assert_eq "$label" "$expected" "$actual"
 }
 
-# ─── Extract functions from pipeline script ──────────────────────
-# awk extracts each function definition (from opening line to the
-# closing } at column 1) so we can source them without running the
-# rest of the pipeline.
+# ─── Source helper functions ──────────────────────────────────────
 
-FUNC_FILE=$(mktemp)
-trap 'rm -rf "$FUNC_FILE" "$WORK_DIR"' EXIT
+trap 'rm -rf "$WORK_DIR"' EXIT
 
-awk '/^validate_json\(\) \{$/,/^\}$/' "$PIPELINE"  >"$FUNC_FILE"
-awk '/^emit_failure\(\) \{$/,/^\}$/'  "$PIPELINE" >>"$FUNC_FILE"
-
-# shellcheck source=/dev/null
-source "$FUNC_FILE"
+# shellcheck source=lib/pipeline-helpers.sh
+source "$SCRIPT_DIR/lib/pipeline-helpers.sh"
 
 # Fresh WORK_DIR for every test group.
 reset_work_dir() {
