@@ -114,7 +114,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const t = require('slack-notify');\nconst issue = $('Get oldest ai-ready Issue').first().json;\nconst threadMap = $getWorkflowStaticData('global').slackThreads || {};\nconst _payload = t.buildPayloadForContext({\n  kind: 'start',\n  issue,\n  env: $env,\n  threadTs: threadMap[issue.number]\n});\n_payload.startedAt = $now.toMillis();\nreturn [{ json: _payload }];"
+        "jsCode": "const t = require('slack-notify');\nconst issue = $('Get oldest ai-ready Issue').first().json;\nconst threadMap = $getWorkflowStaticData('global').slackThreads || {};\nconst _payload = t.buildPayloadForContext({\n  kind: 'start',\n  issue,\n  env: $env,\n  threadTs: threadMap[issue.number]\n});\nreturn [{ json: { ..._payload, startedAt: $now.toMillis() } }];"
       },
       "id": "node-build-start-payload",
       "name": "Build start payload",

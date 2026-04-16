@@ -77,7 +77,7 @@ function elapsedSinceStart(startedAt) {
   let startMs;
   if (typeof startedAt === 'number') {
     // Pre-normalised epoch milliseconds — preferred path.
-    // The n8n "Build start payload" Code node captures Date.now()
+    // The n8n "Build start payload" Code node captures $now.toMillis()
     // and downstream nodes reference it, so the package never has
     // to guess the upstream type.
     startMs = startedAt;
