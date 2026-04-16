@@ -263,7 +263,7 @@ Synthesizer の責務:
 Collector・Code Investigator・Web Investigator・Gatekeeper は JSON を stdout に吐く契約。`claude --print` が自然言語の前置き・後置きを混ぜたり、スキーマから逸脱するケースを想定して、以下の 3 層で守る。
 
 1. **システムプロンプト層**: 各エージェントのシステムプロンプトで「出力は単一の JSON オブジェクトのみ。Markdown フェンス・前置き・後置きは禁止」と明示し、期待スキーマ（TypeScript interface 風でもよい）をプロンプト内に埋め込む
-2. **CLI 呼び出し層**: Claude Code の `--output-format json` は使わない（session メタを含むラッパーで、中身の `.result` から再度 JSON を抽出する二重パースになるため）。代わりに `--output-format text` で実行し、アシスタントの生出力をそのまま JSON として扱う
-3. **シェル検証層**: 各エージェントの stdout を `jq -e` でパース + 必須トップレベルキーの存在チェックを行う（例: Collector なら `.issue_summary and .investigation_focus and .initial_keywords and .linked_urls`）。`jq` 終了コードが非 0 なら「スキーマ違反」としてそのエージェントを失敗扱いし、[パイプラインのエラーハンドリング](#パイプラインのエラーハンドリング) 表の分類（Collector / Code Investigator / Synthesizer は fatal、Web Investigator / Gatekeeper は skip）に合流させる
+2. **CLI 呼び出し層**: `--output-format json` で実行し、CLI が返す構造化エンベロープ（`{ "result": "...", ... }`）から `jq -r '.result'` でアシスタントの応答を機械的に取り出す。プロンプト指示に依存した text モードでの生出力パースは行わない
+3. **シェル検証層**: `.result` から取り出した文字列を `jq -e '.'` で JSON として検証し、さらに必須トップレベルキーの存在チェックを行う（例: Collector なら `.issue_summary and .investigation_focus and .initial_keywords and .linked_urls`）。`jq` 終了コードが非 0 なら「スキーマ違反」としてそのエージェントを失敗扱いし、[パイプラインのエラーハンドリング](#パイプラインのエラーハンドリング) 表の分類（Collector / Code Investigator / Synthesizer は fatal、Web Investigator / Gatekeeper は skip）に合流させる
 
 **リトライ方針**: スキーマ違反時の自動リトライは行わない（同じプロンプトで同じ失敗を繰り返すループになりやすいため）。代わりに `jq` でパースを試みた生出力をそのまま失敗時 stderr に含めて、デバッグ時のプロンプト改善の材料に使う。
