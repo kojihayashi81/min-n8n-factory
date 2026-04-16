@@ -215,30 +215,14 @@ validate_json() {
     cp "$file" "$file.raw" 2>/dev/null || true
   fi
 
-  # Carve out the first balanced top-level object. node is always
-  # available inside the n8n container (n8n is a node app), which keeps
-  # this free of jq version quirks around pre-JSON text.
-  if ! node -e '
-    const fs = require("fs");
-    const raw = fs.readFileSync(process.argv[1], "utf8");
-    const start = raw.indexOf("{");
-    if (start < 0) process.exit(2);
-    let depth = 0, inStr = false, esc = false, end = -1;
-    for (let i = start; i < raw.length; i++) {
-      const c = raw[i];
-      if (esc) { esc = false; continue; }
-      if (inStr) {
-        if (c === "\\") esc = true;
-        else if (c === "\"") inStr = false;
-        continue;
-      }
-      if (c === "\"") inStr = true;
-      else if (c === "{") depth++;
-      else if (c === "}") { if (--depth === 0) { end = i; break; } }
-    }
-    if (end < 0) process.exit(3);
-    fs.writeFileSync(process.argv[2], raw.slice(start, end + 1));
-  ' "$file.raw" "$file" 2>/dev/null; then
+  # Extract the best balanced JSON object from the raw response.
+  # The extraction logic lives in extract-balanced-json.js (unit-tested)
+  # and picks the longest valid JSON block, preferring ```json fences and
+  # later positions — so a small example in the preamble won't shadow the
+  # real payload.  node is always available inside the n8n container.
+  local extractor
+  extractor="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/extract-balanced-json.js"
+  if ! node "$extractor" "$file.raw" "$file" 2>/dev/null; then
     return 1
   fi
 
