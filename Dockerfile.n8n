@@ -43,7 +43,9 @@ COPY --from=downloader /usr/local/bin/docker /usr/local/bin/docker
 COPY --from=downloader /usr/local/bin/jq /usr/local/bin/jq
 
 # devcontainer CLI (installs into /usr/local via npm)
-RUN npm install -g @devcontainers/cli && \
+# Pin version: --mount-git-worktree-common-dir requires >=0.81.0.
+# Verify the flag still works before bumping.
+RUN npm install -g @devcontainers/cli@0.86.0 && \
     DC_JS=$(find /opt -name 'devcontainer.js' -path '*/@devcontainers/cli/*' 2>/dev/null | head -1) && \
     printf '#!/bin/sh\nexec node "%s" "$@"\n' "$DC_JS" > /usr/local/bin/devcontainer && \
     chmod +x /usr/local/bin/devcontainer
