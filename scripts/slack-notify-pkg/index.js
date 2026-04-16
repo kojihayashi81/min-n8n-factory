@@ -60,24 +60,28 @@ function extractPrNumber(prUrl) {
   return match ? match[1] : '—';
 }
 
-// Seconds elapsed since the given start timestamp. Accepts three
-// different shapes because the call sites use different date types:
+// Seconds elapsed since the given start timestamp. The preferred
+// input is a plain epoch-ms number (what the n8n Code nodes now
+// capture via Date.now() at the start of the workflow). Legacy
+// shapes are still accepted for backward compatibility and tests:
 //
-// - ISO-8601 string: our unit tests pass these directly.
-// - JavaScript Date: pre-Luxon n8n versions and other callers.
-// - Luxon DateTime: what n8n's Code nodes actually receive via
-//   `$execution.startedAt` and friends. Luxon DateTime is NOT an
-//   `instanceof Date`, and `new Date(luxonDT)` relies on the
-//   object's `toString()` which may or may not round-trip cleanly
-//   across locales, so detect the duck-typed `toMillis` / `toISO`
-//   methods explicitly before falling back to Date coercion.
+// - number: epoch milliseconds (preferred path).
+// - ISO-8601 string: unit tests pass these directly.
+// - JavaScript Date object.
+// - Luxon DateTime: duck-typed via `toMillis` / `toISO`.
 //
 // Falls back to 0 when the input is missing or unparseable so the
 // builders stay pure and crash-free.
 function elapsedSinceStart(startedAt) {
-  if (!startedAt) return 0;
+  if (!startedAt && startedAt !== 0) return 0;
   let startMs;
-  if (startedAt instanceof Date) {
+  if (typeof startedAt === 'number') {
+    // Pre-normalised epoch milliseconds — preferred path.
+    // The n8n "Build start payload" Code node captures $now.toMillis()
+    // and downstream nodes reference it, so the package never has
+    // to guess the upstream type.
+    startMs = startedAt;
+  } else if (startedAt instanceof Date) {
     startMs = startedAt.getTime();
   } else if (typeof startedAt === 'object' && typeof startedAt.toMillis === 'function') {
     // Luxon DateTime (n8n's $execution.startedAt etc.)
