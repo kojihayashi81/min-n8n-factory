@@ -211,10 +211,11 @@ validate_json() {
   fi
 
   # Extract .result from the CLI envelope and parse it as JSON.
-  # If Claude added preamble text, .result won't be valid JSON and this fails
-  # explicitly — which is the correct behavior (retry rather than guess).
+  # -e makes jq exit non-zero when .result is null/false/missing, and
+  # // empty suppresses output entirely in those cases, so we fail fast
+  # at this stage instead of passing "null" to the next jq invocation.
   local result
-  result=$(jq -r '.result' "$file.raw" 2>/dev/null) || return 1
+  result=$(jq -e -r '.result // empty' "$file.raw" 2>/dev/null) || return 1
 
   # Validate that .result is itself valid JSON and write the cleaned output.
   if ! printf '%s' "$result" | jq -e '.' >"$file" 2>/dev/null; then
@@ -238,7 +239,21 @@ emit_failure() {
   echo "=== pipeline failed at agent=$name (exit=$exit_code, reason=$reason) ===" >&2
   # -s: only print header when the file exists AND is non-empty, so
   # empty captures don't add noise to Slack / GitHub comments.
-  if [ -s "$WORK_DIR/${name}.stdout" ]; then
+  # When validate_json has run, two files may exist:
+  #   .stdout.raw — original CLI envelope (always useful for full context)
+  #   .stdout     — extracted clean JSON (more readable for schema-key failures)
+  # Show both when they differ; show whichever one exists otherwise.
+  if [ -s "$WORK_DIR/${name}.stdout.raw" ]; then
+    echo "--- ${name} stdout.raw (CLI envelope) ---" >&2
+    cat "$WORK_DIR/${name}.stdout.raw" >&2
+    # Also show .stdout if it exists, is non-empty, and differs from .raw
+    # (i.e. validate_json extracted clean JSON before the schema check failed).
+    if [ -s "$WORK_DIR/${name}.stdout" ] \
+       && ! cmp -s "$WORK_DIR/${name}.stdout" "$WORK_DIR/${name}.stdout.raw"; then
+      echo "--- ${name} stdout (extracted JSON) ---" >&2
+      cat "$WORK_DIR/${name}.stdout" >&2
+    fi
+  elif [ -s "$WORK_DIR/${name}.stdout" ]; then
     echo "--- ${name} stdout ---" >&2
     cat "$WORK_DIR/${name}.stdout" >&2
   fi
