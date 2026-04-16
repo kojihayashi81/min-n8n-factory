@@ -1,0 +1,8 @@
+{
+  // n8n workflow JSON contains long string values (notes, jsCode) that
+  // cannot be broken across lines.  Word wrap keeps them readable in
+  // the editor without altering the file.
+  "[json]": {
+    "editor.wordWrap": "on"
+  }
+}
