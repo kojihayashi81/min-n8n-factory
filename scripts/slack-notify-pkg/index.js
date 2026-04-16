@@ -206,8 +206,8 @@ function formatQualityScoreLine(score, max, rerunScore, webSkipReason) {
   if (typeof score !== 'number') return null;
   const safeMax = typeof max === 'number' && max > 0 ? max : 100;
   // 80 点満点は Web 調査失敗/スキップ時のみ。通常ケースと混ざると「なぜ 80？」と
-  // なりやすいので本文に明示する。skip 理由（検索ヒントなし / Web 調査失敗）も
-  // 併記してレビュー時に 80 点満点の根拠が追えるようにする。
+  // なりやすいので本文に明示する。skip 理由（検索ヒントなしによりスキップ /
+  // Web 調査が失敗したためスキップ）も併記してレビュー時に 80 点満点の根拠が追えるようにする。
   const skipPhrase =
     webSkipReason === 'no_hints'
       ? '検索ヒントなしによりスキップ'
