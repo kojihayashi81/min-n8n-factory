@@ -537,7 +537,8 @@ fi
 #
 #   git commit → exit 1 + "nothing to commit" → OK (note already staged upstream)
 #   git push   → "Everything up-to-date" → native exit 0
-#   gh pr create → already-exists error → look up the existing PR URL instead
+#   gh pr list   → find existing open PR → reuse its URL
+#   gh pr create → already-exists error → retry gh pr list to recover the URL
 
 set +e
 dc_exec bash -c "git add '$NOTE_REL_PATH' && git commit -m 'investigate: add investigation note for issue #${ISSUE_NUMBER}'" \
@@ -592,12 +593,38 @@ else
   set -e
 
   if [ "$pr_exit" -ne 0 ]; then
-    emit_failure pr-create "$pr_exit" "gh pr create exit=$pr_exit"
+    # Safety net: if gh pr list failed earlier (network blip / API 429) but
+    # a PR already exists, gh pr create errors with "already exists".
+    # Retry gh pr list once to recover the URL instead of failing the pipeline.
+    if grep -qiF 'already exists' "$WORK_DIR/pr-create.stderr" 2>/dev/null; then
+      echo "=== pr-create: detected 'already exists'; retrying gh pr list ===" >&2
+      set +e
+      dc_exec gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url // empty' \
+        >"$WORK_DIR/pr-existing-retry.stdout" 2>"$WORK_DIR/pr-existing-retry.stderr"
+      retry_exit=$?
+      set -e
+      RETRY_PR_URL=""
+      if [ "$retry_exit" -eq 0 ]; then
+        RETRY_PR_URL=$(tr -d '\r\n' <"$WORK_DIR/pr-existing-retry.stdout")
+      fi
+      if [ -n "$RETRY_PR_URL" ]; then
+        echo "=== pr-create: recovered existing PR $RETRY_PR_URL ===" >&2
+        PR_URL="$RETRY_PR_URL"
+      elif [ "$retry_exit" -eq 0 ]; then
+        emit_failure pr-create "$pr_exit" "gh pr create said 'already exists' but gh pr list retry returned no open PR (branch may have been merged/closed)"
+      else
+        emit_failure pr-create "$pr_exit" "gh pr create said 'already exists' but gh pr list retry also failed (exit=$retry_exit)"
+      fi
+    else
+      emit_failure pr-create "$pr_exit" "gh pr create exit=$pr_exit"
+    fi
   fi
 
-  PR_URL=$(grep -Eo 'https://github\.com/[^[:space:]]+/pull/[0-9]+' "$WORK_DIR/pr-create.stdout" | tail -1)
-  if [ -z "$PR_URL" ]; then
-    emit_failure pr-create 12 "gh pr create succeeded but no PR URL found in stdout"
+  if [ -z "${PR_URL:-}" ]; then
+    PR_URL=$(grep -Eo 'https://github\.com/[^[:space:]]+/pull/[0-9]+' "$WORK_DIR/pr-create.stdout" | tail -1)
+    if [ -z "$PR_URL" ]; then
+      emit_failure pr-create 12 "gh pr create succeeded but no PR URL found in stdout"
+    fi
   fi
 fi
 
